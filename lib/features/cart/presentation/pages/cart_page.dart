@@ -719,7 +719,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       children: [
         // En-tête du panier
         Container(
-          margin: const EdgeInsets.only(bottom: isExpanded ? 0 : 16),
+          margin: EdgeInsets.only(bottom: isExpanded ? 0 : 16),
           decoration: BoxDecoration(
             color: AppColors.getCardBackground(isDark),
             borderRadius: BorderRadius.vertical(
