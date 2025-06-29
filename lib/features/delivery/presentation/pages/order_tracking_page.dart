@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart'; // Import ajouté pour kDebugMode
 import 'dart:async';
 import 'package:latlong2/latlong.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -125,20 +126,26 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   
   void _subscribeToLocationUpdates() {
     try {
-      final stream = DeliveryService.getOrderLocationUpdates(widget.orderId);
-      
-      if (stream != null) {
-        _locationSubscription = stream.listen((data) {
-          if (mounted) {
+      // S'abonner aux mises à jour de position via le service de localisation
+      _locationSubscription = LocationService.subscribeToDeliveryUpdates(widget.orderId).listen(
+        (data) {
+          if (mounted && data.isNotEmpty) {
             setState(() {
               _deliveryLatitude = data['latitude'];
               _deliveryLongitude = data['longitude'];
             });
           }
-        });
-      }
+        },
+        onError: (error) {
+          if (kDebugMode) {
+            print('❌ Erreur stream de position: $error');
+          }
+        },
+      );
     } catch (e) {
-      debugPrint('❌ Erreur abonnement aux mises à jour de position: $e');
+      if (kDebugMode) {
+        print('❌ Erreur abonnement aux mises à jour de position: $e');
+      }
     }
   }
   

@@ -460,21 +460,25 @@ class DeliveryService {
       // Fermer le canal précédent s'il existe
       _orderTrackingChannel?.unsubscribe();
       
-      // Créer un nouveau canal
-      _orderTrackingChannel = _client.channel('order_tracking:$orderId');
-      
-      // S'abonner aux mises à jour
-      _orderTrackingChannel!.subscribe((status, [error]) {
-        if (status == 'SUBSCRIBED') {
-          if (kDebugMode) {
-            print('✅ Abonnement au suivi de la commande $orderId');
-          }
-        } else if (error != null) {
-          if (kDebugMode) {
-            print('❌ Erreur abonnement: $error');
-          }
-        }
-      });
+      // Créer un nouveau canal pour écouter les changements
+      _orderTrackingChannel = _client
+          .channel('order_tracking_$orderId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'order_tracking',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'order_id',
+              value: orderId,
+            ),
+            callback: (payload) {
+              if (kDebugMode) {
+                print('✅ Mise à jour de suivi reçue: ${payload.newRecord}');
+              }
+            },
+          )
+          .subscribe();
       
       if (kDebugMode) {
         print('✅ Canal créé pour la commande $orderId');
@@ -493,13 +497,28 @@ class DeliveryService {
   }
   
   /// Obtenir un stream de mises à jour de position pour une commande
-  static Stream<dynamic>? getOrderLocationUpdates(String orderId) {
+  static RealtimeChannel? getOrderLocationUpdates(String orderId) {
     try {
-      final channel = _client.channel('order_tracking:$orderId');
+      final channel = _client
+          .channel('delivery_location_$orderId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'order_tracking',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'order_id',
+              value: orderId,
+            ),
+            callback: (payload) {
+              if (kDebugMode) {
+                print('📍 Mise à jour de position: ${payload.newRecord}');
+              }
+            },
+          )
+          .subscribe();
       
-      channel.subscribe();
-      
-      return channel.stream();
+      return channel;
     } catch (e) {
       if (kDebugMode) {
         print('❌ Erreur création stream de position: $e');
