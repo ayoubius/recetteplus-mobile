@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/cart_service.dart';
 import '../../../../core/services/delivery_service.dart';
@@ -308,7 +309,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   
   Future<String?> _getUserId() async {
     try {
-      final user = await CartService._client.auth.currentUser;
+      final user = Supabase.instance.client.auth.currentUser;
       return user?.id;
     } catch (e) {
       return null;
