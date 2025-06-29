@@ -22,6 +22,8 @@ class _ProductsPageState extends State<ProductsPage> with TickerProviderStateMix
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _featuredCarts = [];
   bool _isLoading = true;
+  bool _hasError = false;
+  String _errorMessage = '';
   Timer? _autoScrollTimer;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -77,6 +79,8 @@ class _ProductsPageState extends State<ProductsPage> with TickerProviderStateMix
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
     });
 
     try {
@@ -95,11 +99,10 @@ class _ProductsPageState extends State<ProductsPage> with TickerProviderStateMix
     } catch (e) {
       if (mounted) {
         setState(() {
-          _products = _getSampleProducts();
-          _featuredCarts = _getSampleFeaturedCarts();
           _isLoading = false;
+          _hasError = true;
+          _errorMessage = e.toString();
         });
-        _animationController.forward();
       }
     }
   }
@@ -113,161 +116,23 @@ class _ProductsPageState extends State<ProductsPage> with TickerProviderStateMix
             : null,
       );
 
-      // Si aucun produit en base, utiliser des données d'exemple
-      if (products.isEmpty && _selectedCategory == 'Tous' && _searchController.text.isEmpty) {
-        _products = _getSampleProducts();
-      } else {
+      setState(() {
         _products = products;
-      }
+      });
     } catch (e) {
-      _products = _getSampleProducts();
+      throw Exception('Impossible de charger les produits: $e');
     }
   }
 
   Future<void> _loadFeaturedCarts() async {
     try {
       final carts = await CartService.getFeaturedPreconfiguredCarts();
-
-      if (carts.isEmpty) {
-        _featuredCarts = _getSampleFeaturedCarts();
-      } else {
+      setState(() {
         _featuredCarts = carts;
-      }
+      });
     } catch (e) {
-      _featuredCarts = _getSampleFeaturedCarts();
+      throw Exception('Impossible de charger les paniers en vedette: $e');
     }
-  }
-
-  List<Map<String, dynamic>> _getSampleProducts() {
-    return [
-      {
-        'id': '1',
-        'name': 'Huile d\'olive extra vierge',
-        'category': 'Huiles',
-        'price': 4250.0,
-        'rating': 4.8,
-        'image': 'https://images.pexels.com/photos/33783/olive-oil-salad-dressing-cooking-olive.jpg',
-        'description': 'Huile d\'olive premium de première pression à froid',
-        'in_stock': true,
-        'unit': 'bouteille 500ml',
-      },
-      {
-        'id': '2',
-        'name': 'Set d\'épices du monde',
-        'category': 'Épices',
-        'price': 16400.0,
-        'rating': 4.6,
-        'image': 'https://images.pexels.com/photos/1340116/pexels-photo-1340116.jpeg',
-        'description': 'Collection de 12 épices exotiques',
-        'in_stock': true,
-        'unit': 'coffret',
-      },
-      {
-        'id': '3',
-        'name': 'Couteau de chef professionnel',
-        'category': 'Ustensiles',
-        'price': 59000.0,
-        'rating': 4.9,
-        'image': 'https://images.pexels.com/photos/2284166/pexels-photo-2284166.jpeg',
-        'description': 'Couteau en acier inoxydable de haute qualité',
-        'in_stock': false,
-        'unit': 'pièce',
-      },
-      {
-        'id': '4',
-        'name': 'Mixeur haute performance',
-        'category': 'Électroménager',
-        'price': 131000.0,
-        'rating': 4.7,
-        'image': 'https://images.pexels.com/photos/4226796/pexels-photo-4226796.jpeg',
-        'description': 'Mixeur puissant 1200W',
-        'in_stock': true,
-        'unit': 'appareil',
-      },
-      {
-        'id': '5',
-        'name': 'Livre "Cuisine du monde"',
-        'category': 'Livres',
-        'price': 19700.0,
-        'rating': 4.5,
-        'image': 'https://images.pexels.com/photos/1370295/pexels-photo-1370295.jpeg',
-        'description': '200 recettes traditionnelles',
-        'in_stock': true,
-        'unit': 'livre',
-      },
-      {
-        'id': '6',
-        'name': 'Miel bio de lavande',
-        'category': 'Bio',
-        'price': 10500.0,
-        'rating': 4.8,
-        'image': 'https://images.pexels.com/photos/1638280/pexels-photo-1638280.jpeg',
-        'description': 'Miel artisanal bio récolté en Provence',
-        'in_stock': true,
-        'unit': 'pot 250g',
-      },
-    ];
-  }
-
-  List<Map<String, dynamic>> _getSampleFeaturedCarts() {
-    return [
-      {
-        'id': 'featured-cart-1',
-        'name': 'Kit Pâtisserie Complet',
-        'description': 'Tout pour commencer la pâtisserie comme un chef',
-        'image': 'https://images.pexels.com/photos/1070850/pexels-photo-1070850.jpeg',
-        'total_price': 45000.0,
-        'category': 'Pâtisserie',
-        'is_featured': true,
-        'items_count': 8,
-      },
-      {
-        'id': 'featured-cart-2',
-        'name': 'Épices du Monde',
-        'description': 'Sélection d\'épices exotiques pour voyager',
-        'image': 'https://images.pexels.com/photos/1340116/pexels-photo-1340116.jpeg',
-        'total_price': 32000.0,
-        'category': 'Épices',
-        'is_featured': true,
-        'items_count': 12,
-      },
-      {
-        'id': 'featured-cart-3',
-        'name': 'Cuisine Healthy',
-        'description': 'Produits bio et naturels pour une cuisine saine',
-        'image': 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg',
-        'total_price': 28500.0,
-        'category': 'Bio',
-        'is_featured': true,
-        'items_count': 6,
-      },
-      {
-        'id': 'featured-cart-4',
-        'name': 'Ustensiles Pro',
-        'description': 'Équipement professionnel pour votre cuisine',
-        'image': 'https://images.pexels.com/photos/2284166/pexels-photo-2284166.jpeg',
-        'total_price': 89000.0,
-        'category': 'Ustensiles',
-        'is_featured': true,
-        'items_count': 5,
-      },
-    ];
-  }
-
-  List<Map<String, dynamic>> get _filteredProducts {
-    if (_searchController.text.isEmpty && _selectedCategory == 'Tous') {
-      return _products;
-    }
-
-    return _products.where((product) {
-      final matchesCategory = _selectedCategory == 'Tous' ||
-                             product['category'] == _selectedCategory;
-      final matchesSearch = _searchController.text.isEmpty ||
-                           product['name']
-                               .toLowerCase()
-                               .contains(_searchController.text.toLowerCase());
-      return matchesCategory && matchesSearch;
-    }).toList();
   }
 
   Future<void> _addToCart(Map<String, dynamic> product) async {
@@ -546,28 +411,30 @@ class _ProductsPageState extends State<ProductsPage> with TickerProviderStateMix
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : _filteredProducts.isEmpty
-                      ? _buildEmptyState(isDark)
-                      : FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: RefreshIndicator(
-                            onRefresh: _loadData,
-                            child: GridView.builder(
-                              padding: const EdgeInsets.all(20),
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                childAspectRatio: 0.7, // Ajusté pour éviter l'overflow
-                                crossAxisSpacing: 16,
-                                mainAxisSpacing: 16,
+                  : _hasError
+                      ? _buildErrorState(isDark)
+                      : _products.isEmpty
+                          ? _buildEmptyState(isDark)
+                          : FadeTransition(
+                              opacity: _fadeAnimation,
+                              child: RefreshIndicator(
+                                onRefresh: _loadData,
+                                child: GridView.builder(
+                                  padding: const EdgeInsets.all(20),
+                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    childAspectRatio: 0.7, // Ajusté pour éviter l'overflow
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                  ),
+                                  itemCount: _products.length,
+                                  itemBuilder: (context, index) {
+                                    final product = _products[index];
+                                    return _buildProductCard(product, isDark);
+                                  },
+                                ),
                               ),
-                              itemCount: _filteredProducts.length,
-                              itemBuilder: (context, index) {
-                                final product = _filteredProducts[index];
-                                return _buildProductCard(product, isDark);
-                              },
                             ),
-                          ),
-                        ),
             ),
           ],
         ),
@@ -808,6 +675,66 @@ class _ProductsPageState extends State<ProductsPage> with TickerProviderStateMix
             const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: AppColors.error.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.error_outline,
+              size: 60,
+              color: AppColors.error.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Erreur de chargement',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppColors.getTextPrimary(isDark),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              _errorMessage.isNotEmpty 
+                  ? _errorMessage 
+                  : 'Impossible de charger les produits. Veuillez vérifier votre connexion.',
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.getTextSecondary(isDark),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Réessayer'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

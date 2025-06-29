@@ -35,7 +35,7 @@ class VideoService {
       if (kDebugMode) {
         print('❌ Erreur récupération vidéos: $e');
       }
-      return [];
+      throw Exception('Impossible de récupérer les vidéos: $e');
     }
   }
 
@@ -148,7 +148,7 @@ class VideoService {
       if (kDebugMode) {
         print('❌ Erreur récupération vidéos infinies: $e');
       }
-      return [];
+      throw Exception('Impossible de récupérer plus de vidéos: $e');
     }
   }
 
@@ -166,7 +166,7 @@ class VideoService {
       if (kDebugMode) {
         print('❌ Erreur récupération vidéos par catégorie: $e');
       }
-      return [];
+      throw Exception('Impossible de récupérer les vidéos par catégorie: $e');
     }
   }
 
@@ -184,7 +184,7 @@ class VideoService {
       if (kDebugMode) {
         print('❌ Erreur recherche vidéos: $e');
       }
-      return [];
+      throw Exception('Impossible de rechercher des vidéos: $e');
     }
   }
 
@@ -202,7 +202,7 @@ class VideoService {
       if (kDebugMode) {
         print('❌ Erreur récupération vidéos populaires: $e');
       }
-      return [];
+      throw Exception('Impossible de récupérer les vidéos populaires: $e');
     }
   }
 
@@ -220,7 +220,7 @@ class VideoService {
       if (kDebugMode) {
         print('❌ Erreur récupération vidéos récentes: $e');
       }
-      return [];
+      throw Exception('Impossible de récupérer les vidéos récentes: $e');
     }
   }
 }

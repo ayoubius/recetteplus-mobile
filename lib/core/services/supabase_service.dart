@@ -258,7 +258,7 @@ class SupabaseService {
     try {
       var query = _client.from('recipes').select();
 
-      if (category != null && category.isNotEmpty) {
+      if (category != null && category.isNotEmpty && category != 'Toutes') {
         query = query.eq('category', category);
       }
 
@@ -284,7 +284,7 @@ class SupabaseService {
       if (kDebugMode) {
         print('❌ Erreur lors de la récupération des recettes: $e');
       }
-      return [];
+      throw Exception('Impossible de récupérer les recettes: $e');
     }
   }
 
@@ -297,7 +297,7 @@ class SupabaseService {
     try {
       var query = _client.from('products').select();
 
-      if (category != null && category.isNotEmpty) {
+      if (category != null && category.isNotEmpty && category != 'Tous') {
         query = query.eq('category', category);
       }
 
@@ -321,7 +321,7 @@ class SupabaseService {
       if (kDebugMode) {
         print('❌ Erreur lors de la récupération des produits: $e');
       }
-      return [];
+      throw Exception('Impossible de récupérer les produits: $e');
     }
   }
 

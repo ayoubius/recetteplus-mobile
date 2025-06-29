@@ -17,6 +17,8 @@ class _RecipesPageState extends State<RecipesPage> with TickerProviderStateMixin
   String _sortBy = 'recent'; // recent, popular, rating
   List<Map<String, dynamic>> _recipes = [];
   bool _isLoading = true;
+  bool _hasError = false;
+  String _errorMessage = '';
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   
@@ -67,6 +69,8 @@ class _RecipesPageState extends State<RecipesPage> with TickerProviderStateMixin
   Future<void> _loadRecipes() async {
     setState(() {
       _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
     });
 
     try {
@@ -77,12 +81,7 @@ class _RecipesPageState extends State<RecipesPage> with TickerProviderStateMixin
             : null,
       );
 
-      // Si aucune recette en base, utiliser des données d'exemple
-      if (recipes.isEmpty && _selectedCategory == 'Toutes' && _searchController.text.isEmpty) {
-        _recipes = _getSampleRecipes();
-      } else {
-        _recipes = recipes;
-      }
+      _recipes = recipes;
 
       // Appliquer les filtres et le tri
       _applyFiltersAndSort();
@@ -96,11 +95,11 @@ class _RecipesPageState extends State<RecipesPage> with TickerProviderStateMixin
     } catch (e) {
       if (mounted) {
         setState(() {
-          _recipes = _getSampleRecipes();
-          _applyFiltersAndSort();
           _isLoading = false;
+          _hasError = true;
+          _errorMessage = e.toString();
+          _recipes = [];
         });
-        _animationController.forward();
       }
     }
   }
@@ -149,123 +148,6 @@ class _RecipesPageState extends State<RecipesPage> with TickerProviderStateMixin
     setState(() {
       _recipes = filtered;
     });
-  }
-
-  List<Map<String, dynamic>> _getSampleRecipes() {
-    return [
-      {
-        'id': '1',
-        'title': 'Pasta Carbonara Authentique',
-        'category': 'Plats principaux',
-        'cook_time': 20,
-        'servings': 4,
-        'difficulty': 'Facile',
-        'rating': 4.8,
-        'image': 'https://images.pexels.com/photos/1279330/pexels-photo-1279330.jpeg',
-        'description': 'Un classique italien crémeux et délicieux avec seulement 5 ingrédients',
-        'ingredients': ['400g de spaghetti', '200g de pancetta', '4 œufs', '100g de parmesan', 'Poivre noir'],
-        'instructions': ['Faire cuire les pâtes', 'Faire revenir la pancetta', 'Mélanger œufs et parmesan', 'Combiner le tout'],
-        'created_at': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(),
-      },
-      {
-        'id': '2',
-        'title': 'Salade César Parfaite',
-        'category': 'Entrées',
-        'cook_time': 15,
-        'servings': 2,
-        'difficulty': 'Facile',
-        'rating': 4.5,
-        'image': 'https://images.pexels.com/photos/2097090/pexels-photo-2097090.jpeg',
-        'description': 'Salade fraîche avec croûtons croustillants et parmesan',
-        'ingredients': ['Laitue romaine', 'Croûtons', 'Parmesan', 'Sauce césar', 'Anchois'],
-        'instructions': ['Laver la salade', 'Préparer les croûtons', 'Mélanger avec la sauce'],
-        'created_at': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
-      },
-      {
-        'id': '3',
-        'title': 'Tiramisu Express',
-        'category': 'Desserts',
-        'cook_time': 30,
-        'servings': 6,
-        'difficulty': 'Moyen',
-        'rating': 4.9,
-        'image': 'https://images.pexels.com/photos/6880219/pexels-photo-6880219.jpeg',
-        'description': 'Dessert italien au café et mascarpone, version rapide',
-        'ingredients': ['Mascarpone', 'Œufs', 'Sucre', 'Café', 'Biscuits à la cuillère', 'Cacao'],
-        'instructions': ['Préparer la crème', 'Tremper les biscuits', 'Monter en couches', 'Réfrigérer'],
-        'created_at': DateTime.now().subtract(const Duration(hours: 12)).toIso8601String(),
-      },
-      {
-        'id': '4',
-        'title': 'Smoothie Bowl Tropical',
-        'category': 'Boissons',
-        'cook_time': 5,
-        'servings': 1,
-        'difficulty': 'Facile',
-        'rating': 4.3,
-        'image': 'https://images.pexels.com/photos/1092730/pexels-photo-1092730.jpeg',
-        'description': 'Boisson rafraîchissante aux fruits exotiques',
-        'ingredients': ['Mangue', 'Ananas', 'Banane', 'Lait de coco', 'Granola'],
-        'instructions': ['Mixer les fruits', 'Verser dans un bol', 'Ajouter les toppings'],
-        'created_at': DateTime.now().subtract(const Duration(hours: 6)).toIso8601String(),
-      },
-      {
-        'id': '5',
-        'title': 'Buddha Bowl Nutritif',
-        'category': 'Végétarien',
-        'cook_time': 25,
-        'servings': 2,
-        'difficulty': 'Facile',
-        'rating': 4.6,
-        'image': 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg',
-        'description': 'Bol nutritif avec légumes colorés et quinoa',
-        'ingredients': ['Quinoa', 'Avocat', 'Légumes variés', 'Graines', 'Sauce tahini'],
-        'instructions': ['Cuire le quinoa', 'Préparer les légumes', 'Assembler le bol'],
-        'created_at': DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(),
-      },
-      {
-        'id': '6',
-        'title': 'Omelette Express',
-        'category': 'Rapide',
-        'cook_time': 8,
-        'servings': 1,
-        'difficulty': 'Facile',
-        'rating': 4.2,
-        'image': 'https://images.pexels.com/photos/824635/pexels-photo-824635.jpeg',
-        'description': 'Petit-déjeuner rapide et protéiné',
-        'ingredients': ['3 œufs', 'Beurre', 'Herbes fraîches', 'Fromage', 'Sel et poivre'],
-        'instructions': ['Battre les œufs', 'Chauffer la poêle', 'Cuire l\'omelette'],
-        'created_at': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      },
-      {
-        'id': '7',
-        'title': 'Coq au Vin Traditionnel',
-        'category': 'Plats principaux',
-        'cook_time': 120,
-        'servings': 6,
-        'difficulty': 'Difficile',
-        'rating': 4.7,
-        'image': 'https://images.pexels.com/photos/958545/pexels-photo-958545.jpeg',
-        'description': 'Plat traditionnel français mijoté au vin rouge',
-        'ingredients': ['Poulet fermier', 'Vin rouge', 'Lardons', 'Champignons', 'Oignons'],
-        'instructions': ['Faire mariner le poulet', 'Faire revenir', 'Mijoter longuement'],
-        'created_at': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(),
-      },
-      {
-        'id': '8',
-        'title': 'Tarte Tatin aux Pommes',
-        'category': 'Desserts',
-        'cook_time': 60,
-        'servings': 8,
-        'difficulty': 'Moyen',
-        'rating': 4.4,
-        'image': 'https://images.pexels.com/photos/1126359/pexels-photo-1126359.jpeg',
-        'description': 'Tarte renversée aux pommes caramélisées',
-        'ingredients': ['Pommes', 'Pâte brisée', 'Sucre', 'Beurre', 'Cannelle'],
-        'instructions': ['Caraméliser les pommes', 'Recouvrir de pâte', 'Cuire et retourner'],
-        'created_at': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(),
-      },
-    ];
   }
 
   Future<void> _addToFavorites(Map<String, dynamic> recipe) async {
@@ -470,22 +352,24 @@ class _RecipesPageState extends State<RecipesPage> with TickerProviderStateMixin
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _recipes.isEmpty
-              ? _buildEmptyState(isDark)
-              : FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: RefreshIndicator(
-                    onRefresh: _loadRecipes,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(20),
-                      itemCount: _recipes.length,
-                      itemBuilder: (context, index) {
-                        final recipe = _recipes[index];
-                        return _buildRecipeCard(recipe, isDark);
-                      },
+          : _hasError
+              ? _buildErrorState(isDark)
+              : _recipes.isEmpty
+                  ? _buildEmptyState(isDark)
+                  : FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: RefreshIndicator(
+                        onRefresh: _loadRecipes,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(20),
+                          itemCount: _recipes.length,
+                          itemBuilder: (context, index) {
+                            final recipe = _recipes[index];
+                            return _buildRecipeCard(recipe, isDark);
+                          },
+                        ),
+                      ),
                     ),
-                  ),
-                ),
     );
   }
 
@@ -597,6 +481,66 @@ class _RecipesPageState extends State<RecipesPage> with TickerProviderStateMixin
             const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: AppColors.error.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.error_outline,
+              size: 60,
+              color: AppColors.error.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Erreur de chargement',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppColors.getTextPrimary(isDark),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              _errorMessage.isNotEmpty 
+                  ? _errorMessage 
+                  : 'Impossible de charger les recettes. Veuillez vérifier votre connexion.',
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.getTextSecondary(isDark),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: _loadRecipes,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Réessayer'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

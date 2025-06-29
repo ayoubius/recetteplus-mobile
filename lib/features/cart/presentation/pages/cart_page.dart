@@ -14,6 +14,8 @@ class CartPage extends StatefulWidget {
 class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   List<Map<String, dynamic>> _cartItems = [];
   bool _isLoading = true;
+  bool _hasError = false;
+  String _errorMessage = '';
   double _total = 0.0;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -40,23 +42,18 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   Future<void> _loadCartItems() async {
     setState(() {
       _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
     });
 
     try {
       final items = await CartService.getMainCartItems();
       final total = await CartService.calculateMainCartTotal();
       
-      // Simuler des données si le panier est vide
-      if (items.isEmpty) {
-        _cartItems = _getSampleCartItems();
-        _total = _calculateSampleTotal();
-      } else {
-        _cartItems = items;
-        _total = total;
-      }
-      
       if (mounted) {
         setState(() {
+          _cartItems = items;
+          _total = total;
           _isLoading = false;
         });
         _animationController.forward();
@@ -64,55 +61,12 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _cartItems = _getSampleCartItems();
-          _total = _calculateSampleTotal();
+          _hasError = true;
+          _errorMessage = e.toString();
           _isLoading = false;
         });
-        _animationController.forward();
       }
     }
-  }
-
-  List<Map<String, dynamic>> _getSampleCartItems() {
-    return [
-      {
-        'id': '1',
-        'cart_name': 'Huile d\'olive extra vierge',
-        'items_count': 2,
-        'cart_total_price': 8500.0, // Prix en FCFA
-        'image': 'https://images.pexels.com/photos/33783/olive-oil-salad-dressing-cooking-olive.jpg',
-        'unit_price': 4250.0, // Prix unitaire en FCFA
-        'category': 'Huiles',
-      },
-      {
-        'id': '2',
-        'cart_name': 'Set d\'épices du monde',
-        'items_count': 1,
-        'cart_total_price': 16400.0, // Prix en FCFA
-        'image': 'https://images.pexels.com/photos/1340116/pexels-photo-1340116.jpeg',
-        'unit_price': 16400.0,
-        'category': 'Épices',
-      },
-      {
-        'id': '3',
-        'cart_name': 'Miel bio de lavande',
-        'items_count': 3,
-        'cart_total_price': 31500.0, // Prix en FCFA
-        'image': 'https://images.pexels.com/photos/1638280/pexels-photo-1638280.jpeg',
-        'unit_price': 10500.0,
-        'category': 'Bio',
-      },
-    ];
-  }
-
-  double _calculateSampleTotal() {
-    return _cartItems.fold(0.0, (sum, item) {
-      final price = item['cart_total_price'];
-      if (price is num) {
-        return sum + price.toDouble();
-      }
-      return sum;
-    });
   }
 
   // Fonction utilitaire pour convertir en double de manière sécurisée
@@ -276,90 +230,152 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _cartItems.isEmpty
-              ? _buildEmptyCart(isDark)
-              : FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Column(
-                    children: [
-                      // Header avec résumé
-                      Container(
-                        margin: const EdgeInsets.all(16),
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+          : _hasError
+              ? _buildErrorState(isDark)
+              : _cartItems.isEmpty
+                  ? _buildEmptyCart(isDark)
+                  : FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: Column(
+                        children: [
+                          // Header avec résumé
+                          Container(
+                            margin: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withOpacity(0.3),
+                                  blurRadius: 15,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(
+                                    Icons.shopping_cart,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${_cartItems.length} article${_cartItems.length > 1 ? 's' : ''}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Total: ${CurrencyUtils.formatPrice(_total)}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withOpacity(0.3),
-                              blurRadius: 15,
-                              offset: const Offset(0, 8),
+                          
+                          // Liste des articles
+                          Expanded(
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: _cartItems.length,
+                              itemBuilder: (context, index) {
+                                final item = _cartItems[index];
+                                return _buildCartItem(item, index, isDark);
+                              },
                             ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                Icons.shopping_cart,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${_cartItems.length} article${_cartItems.length > 1 ? 's' : ''}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Total: ${CurrencyUtils.formatPrice(_total)}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                          
+                          // Bouton de commande
+                          _buildCheckoutButton(isDark),
+                        ],
                       ),
-                      
-                      // Liste des articles
-                      Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: _cartItems.length,
-                          itemBuilder: (context, index) {
-                            final item = _cartItems[index];
-                            return _buildCartItem(item, index, isDark);
-                          },
-                        ),
-                      ),
-                      
-                      // Bouton de commande
-                      _buildCheckoutButton(isDark),
-                    ],
-                  ),
-                ),
+                    ),
+    );
+  }
+
+  Widget _buildErrorState(bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: AppColors.error.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.error_outline,
+              size: 60,
+              color: AppColors.error.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Erreur de chargement',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppColors.getTextPrimary(isDark),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              _errorMessage.isNotEmpty 
+                  ? _errorMessage 
+                  : 'Impossible de charger votre panier. Veuillez vérifier votre connexion.',
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.getTextSecondary(isDark),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: _loadCartItems,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Réessayer'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

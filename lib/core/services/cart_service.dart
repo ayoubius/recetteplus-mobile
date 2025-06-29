@@ -38,7 +38,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur récupération/création panier: $e');
       }
-      return null;
+      throw Exception('Impossible de récupérer ou créer le panier: $e');
     }
   }
 
@@ -59,7 +59,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur récupération items panier principal: $e');
       }
-      return [];
+      throw Exception('Impossible de récupérer les items du panier: $e');
     }
   }
 
@@ -97,7 +97,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur récupération/création panier personnel: $e');
       }
-      return null;
+      throw Exception('Impossible de récupérer ou créer le panier personnel: $e');
     }
   }
 
@@ -144,7 +144,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur ajout au panier personnel: $e');
       }
-      rethrow;
+      throw Exception('Impossible d\'ajouter le produit au panier: $e');
     }
   }
 
@@ -176,7 +176,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur création panier recette: $e');
       }
-      return null;
+      throw Exception('Impossible de créer le panier recette: $e');
     }
   }
 
@@ -215,7 +215,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur ajout recette au panier: $e');
       }
-      rethrow;
+      throw Exception('Impossible d\'ajouter la recette au panier: $e');
     }
   }
 
@@ -236,7 +236,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur récupération paniers recette: $e');
       }
-      return [];
+      throw Exception('Impossible de récupérer les paniers recette: $e');
     }
   }
 
@@ -257,7 +257,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur récupération paniers préconfigurés: $e');
       }
-      return [];
+      throw Exception('Impossible de récupérer les paniers préconfigurés: $e');
     }
   }
 
@@ -293,7 +293,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur ajout panier préconfigué: $e');
       }
-      rethrow;
+      throw Exception('Impossible d\'ajouter le panier préconfiguré: $e');
     }
   }
 
@@ -360,6 +360,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur mise à jour panier principal depuis personnel: $e');
       }
+      throw Exception('Erreur de mise à jour du panier: $e');
     }
   }
 
@@ -412,6 +413,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur mise à jour panier principal depuis recette: $e');
       }
+      throw Exception('Erreur de mise à jour du panier: $e');
     }
   }
 
@@ -445,6 +447,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur mise à jour panier principal depuis préconfigué: $e');
       }
+      throw Exception('Erreur de mise à jour du panier: $e');
     }
   }
 
@@ -472,6 +475,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur mise à jour total panier principal: $e');
       }
+      throw Exception('Erreur de mise à jour du total du panier: $e');
     }
   }
 
@@ -486,7 +490,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur calcul total panier: $e');
       }
-      return 0.0;
+      throw Exception('Erreur de calcul du total du panier: $e');
     }
   }
 
@@ -505,7 +509,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur suppression item panier: $e');
       }
-      rethrow;
+      throw Exception('Impossible de supprimer l\'item du panier: $e');
     }
   }
 
@@ -535,7 +539,7 @@ class CartService {
       if (kDebugMode) {
         print('❌ Erreur vidage panier: $e');
       }
-      rethrow;
+      throw Exception('Impossible de vider le panier: $e');
     }
   }
 }

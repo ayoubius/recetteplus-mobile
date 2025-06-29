@@ -16,6 +16,8 @@ class _PreconfiguredCartsPageState extends State<PreconfiguredCartsPage> with Ti
   List<Map<String, dynamic>> _allCarts = [];
   List<Map<String, dynamic>> _filteredCarts = [];
   bool _isLoading = true;
+  bool _hasError = false;
+  String _errorMessage = '';
   String _selectedCategory = 'Tous';
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -54,18 +56,15 @@ class _PreconfiguredCartsPageState extends State<PreconfiguredCartsPage> with Ti
   Future<void> _loadPreconfiguredCarts() async {
     setState(() {
       _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
     });
 
     try {
       // Charger tous les paniers préconfigurés (pas seulement ceux en vedette)
       final carts = await CartService.getFeaturedPreconfiguredCarts();
       
-      if (carts.isEmpty) {
-        _allCarts = _getSampleCarts();
-      } else {
-        _allCarts = carts;
-      }
-      
+      _allCarts = carts;
       _filterCarts();
       
       if (mounted) {
@@ -77,11 +76,10 @@ class _PreconfiguredCartsPageState extends State<PreconfiguredCartsPage> with Ti
     } catch (e) {
       if (mounted) {
         setState(() {
-          _allCarts = _getSampleCarts();
-          _filterCarts();
+          _hasError = true;
+          _errorMessage = e.toString();
           _isLoading = false;
         });
-        _animationController.forward();
       }
     }
   }
@@ -96,139 +94,6 @@ class _PreconfiguredCartsPageState extends State<PreconfiguredCartsPage> with Ti
                                .contains(_searchController.text.toLowerCase());
       return matchesCategory && matchesSearch;
     }).toList();
-  }
-
-  List<Map<String, dynamic>> _getSampleCarts() {
-    return [
-      {
-        'id': 'cart-1',
-        'name': 'Kit Pâtisserie Complet',
-        'description': 'Tout pour commencer la pâtisserie comme un chef professionnel avec les meilleurs ustensiles',
-        'image': 'https://images.pexels.com/photos/1070850/pexels-photo-1070850.jpeg',
-        'total_price': 45000.0,
-        'category': 'Pâtisserie',
-        'is_featured': true,
-        'items_count': 8,
-        'items': [
-          {'name': 'Fouet professionnel', 'quantity': 1},
-          {'name': 'Moules à gâteau', 'quantity': 3},
-          {'name': 'Balance de précision', 'quantity': 1},
-          {'name': 'Spatules silicone', 'quantity': 2},
-        ]
-      },
-      {
-        'id': 'cart-2',
-        'name': 'Épices du Monde',
-        'description': 'Sélection d\'épices exotiques pour voyager à travers les saveurs du monde entier',
-        'image': 'https://images.pexels.com/photos/1340116/pexels-photo-1340116.jpeg',
-        'total_price': 32000.0,
-        'category': 'Épices',
-        'is_featured': true,
-        'items_count': 12,
-        'items': [
-          {'name': 'Curcuma bio', 'quantity': 1},
-          {'name': 'Cardamome verte', 'quantity': 1},
-          {'name': 'Paprika fumé', 'quantity': 1},
-          {'name': 'Cannelle de Ceylan', 'quantity': 1},
-        ]
-      },
-      {
-        'id': 'cart-3',
-        'name': 'Cuisine Healthy',
-        'description': 'Produits bio et naturels pour une cuisine saine et équilibrée au quotidien',
-        'image': 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg',
-        'total_price': 28500.0,
-        'category': 'Bio',
-        'is_featured': true,
-        'items_count': 6,
-        'items': [
-          {'name': 'Quinoa bio', 'quantity': 2},
-          {'name': 'Huile de coco vierge', 'quantity': 1},
-          {'name': 'Graines de chia', 'quantity': 1},
-          {'name': 'Spiruline en poudre', 'quantity': 1},
-        ]
-      },
-      {
-        'id': 'cart-4',
-        'name': 'Ustensiles Pro',
-        'description': 'Équipement professionnel pour transformer votre cuisine en laboratoire culinaire',
-        'image': 'https://images.pexels.com/photos/2284166/pexels-photo-2284166.jpeg',
-        'total_price': 89000.0,
-        'category': 'Ustensiles',
-        'is_featured': false,
-        'items_count': 5,
-        'items': [
-          {'name': 'Couteau de chef 20cm', 'quantity': 1},
-          {'name': 'Planche à découper bambou', 'quantity': 1},
-          {'name': 'Mandoline professionnelle', 'quantity': 1},
-          {'name': 'Set de casseroles inox', 'quantity': 1},
-        ]
-      },
-      {
-        'id': 'cart-5',
-        'name': 'Électroménager Essentiel',
-        'description': 'Les appareils indispensables pour une cuisine moderne et efficace',
-        'image': 'https://images.pexels.com/photos/4226796/pexels-photo-4226796.jpeg',
-        'total_price': 156000.0,
-        'category': 'Électroménager',
-        'is_featured': false,
-        'items_count': 4,
-        'items': [
-          {'name': 'Mixeur haute performance', 'quantity': 1},
-          {'name': 'Robot multifonction', 'quantity': 1},
-          {'name': 'Grille-pain design', 'quantity': 1},
-          {'name': 'Bouilloire électrique', 'quantity': 1},
-        ]
-      },
-      {
-        'id': 'cart-6',
-        'name': 'Épices Méditerranéennes',
-        'description': 'Saveurs authentiques de la Méditerranée pour des plats ensoleillés',
-        'image': 'https://images.pexels.com/photos/1340116/pexels-photo-1340116.jpeg',
-        'total_price': 18500.0,
-        'category': 'Épices',
-        'is_featured': false,
-        'items_count': 8,
-        'items': [
-          {'name': 'Herbes de Provence', 'quantity': 1},
-          {'name': 'Origan grec', 'quantity': 1},
-          {'name': 'Thym de Provence', 'quantity': 1},
-          {'name': 'Romarin séché', 'quantity': 1},
-        ]
-      },
-      {
-        'id': 'cart-7',
-        'name': 'Cuisine Asiatique',
-        'description': 'Découvrez les secrets de la cuisine asiatique avec cette sélection d\'ingrédients',
-        'image': 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg',
-        'total_price': 24000.0,
-        'category': 'Cuisine du Monde',
-        'is_featured': false,
-        'items_count': 10,
-        'items': [
-          {'name': 'Sauce soja premium', 'quantity': 1},
-          {'name': 'Huile de sésame', 'quantity': 1},
-          {'name': 'Miso blanc', 'quantity': 1},
-          {'name': 'Nouilles soba', 'quantity': 2},
-        ]
-      },
-      {
-        'id': 'cart-8',
-        'name': 'Kit Débutant',
-        'description': 'Parfait pour commencer en cuisine avec les bases essentielles',
-        'image': 'https://images.pexels.com/photos/2284166/pexels-photo-2284166.jpeg',
-        'total_price': 35000.0,
-        'category': 'Débutant',
-        'is_featured': false,
-        'items_count': 6,
-        'items': [
-          {'name': 'Couteau d\'office', 'quantity': 1},
-          {'name': 'Planche à découper', 'quantity': 1},
-          {'name': 'Poêle antiadhésive', 'quantity': 1},
-          {'name': 'Casserole 2L', 'quantity': 1},
-        ]
-      },
-    ];
   }
 
   Future<void> _addToCart(Map<String, dynamic> cart) async {
@@ -501,22 +366,84 @@ class _PreconfiguredCartsPageState extends State<PreconfiguredCartsPage> with Ti
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _filteredCarts.isEmpty
-                    ? _buildEmptyState(isDark)
-                    : FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: RefreshIndicator(
-                          onRefresh: _loadPreconfiguredCarts,
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(20),
-                            itemCount: _filteredCarts.length,
-                            itemBuilder: (context, index) {
-                              final cart = _filteredCarts[index];
-                              return _buildCartCard(cart, isDark);
-                            },
+                : _hasError
+                    ? _buildErrorState(isDark)
+                    : _filteredCarts.isEmpty
+                        ? _buildEmptyState(isDark)
+                        : FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: RefreshIndicator(
+                              onRefresh: _loadPreconfiguredCarts,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.all(20),
+                                itemCount: _filteredCarts.length,
+                                itemBuilder: (context, index) {
+                                  final cart = _filteredCarts[index];
+                                  return _buildCartCard(cart, isDark);
+                                },
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: AppColors.error.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.error_outline,
+              size: 60,
+              color: AppColors.error.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Erreur de chargement',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppColors.getTextPrimary(isDark),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              _errorMessage.isNotEmpty 
+                  ? _errorMessage 
+                  : 'Impossible de charger les paniers. Veuillez vérifier votre connexion.',
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.getTextSecondary(isDark),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: _loadPreconfiguredCarts,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Réessayer'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
+              ),
+            ),
           ),
         ],
       ),
