@@ -126,7 +126,7 @@ class DeliveryService {
           .from('orders')
           .select('*, profiles(*), order_tracking(*)')
           .eq('delivery_person_id', deliveryPerson.id)
-          .in_('status', ['out_for_delivery', 'ready_for_pickup'])
+          .or('status.eq.out_for_delivery,status.eq.ready_for_pickup')
           .order('created_at', ascending: false);
 
       return List<Map<String, dynamic>>.from(response);
@@ -166,7 +166,7 @@ class DeliveryService {
       final response = await _client
           .from('orders')
           .select('*, profiles(*), delivery_zones(*)')
-          .in_('status', ['confirmed', 'preparing', 'ready_for_pickup'])
+          .or('status.eq.confirmed,status.eq.preparing,status.eq.ready_for_pickup')
           .is_('delivery_person_id', null)
           .order('created_at', ascending: true);
 
@@ -384,7 +384,7 @@ class DeliveryService {
           .from('orders')
           .select('*, order_tracking(*), delivery_zones(*), delivery_persons(*), profiles:delivery_persons(profiles(*))')
           .eq('user_id', userId)
-          .in_('status', ['out_for_delivery', 'ready_for_pickup'])
+          .or('status.eq.out_for_delivery,status.eq.ready_for_pickup')
           .order('created_at', ascending: false);
 
       return List<Map<String, dynamic>>.from(response);
