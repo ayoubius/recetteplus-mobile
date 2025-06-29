@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/video_service.dart';
 import '../widgets/video_player_widget.dart';
@@ -233,9 +234,9 @@ class _VideosPageState extends State<VideosPage> {
                   color: Colors.white54,
                 ),
                 const SizedBox(height: 16),
-                Text(
+                const Text(
                   'Erreur de chargement',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.w500,
