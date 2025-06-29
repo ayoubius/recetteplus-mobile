@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "361640124056",
+    "firebase_url": "https://recette-plus-app-default-rtdb.firebaseio.com",
+    "project_id": "recette-plus-app",
+    "storage_bucket": "recette-plus-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:361640124056:android:7b286e4e2eb3b21a9c7aed",
+        "android_client_info": {
+          "package_name": "com.recetteplus.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "361640124056-jh0j1mncf9pqsc5lirqrpjku7ka42ktn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyATXO_LRFOa-zLgYioMl7lilyiNw6cfXSQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "361640124056-e196o9u9pe0rdg35uj4054k4rjplmfec.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "361640124056-k5k3pgp9ini2gmfnb5tusf87sjq7nsqb.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.recetteplus"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
