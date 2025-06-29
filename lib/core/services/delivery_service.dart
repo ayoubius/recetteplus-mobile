@@ -464,26 +464,20 @@ class DeliveryService {
       _orderTrackingChannel = _client.channel('order_tracking:$orderId');
       
       // S'abonner aux mises à jour
-      _orderTrackingChannel!.on(
-        RealtimeListenTypes.presence,
-        ChannelFilter(event: 'status_change'),
-        (payload, [ref]) {
+      _orderTrackingChannel!.subscribe((status, [error]) {
+        if (status == 'SUBSCRIBED') {
           if (kDebugMode) {
-            print('📡 Mise à jour statut commande: $payload');
+            print('✅ Abonnement au suivi de la commande $orderId');
           }
-        },
-      ).on(
-        RealtimeListenTypes.presence,
-        ChannelFilter(event: 'location_update'),
-        (payload, [ref]) {
+        } else if (error != null) {
           if (kDebugMode) {
-            print('📡 Mise à jour position livreur: $payload');
+            print('❌ Erreur abonnement: $error');
           }
-        },
-      ).subscribe();
+        }
+      });
       
       if (kDebugMode) {
-        print('✅ Abonnement au suivi de la commande $orderId');
+        print('✅ Canal créé pour la commande $orderId');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -505,10 +499,7 @@ class DeliveryService {
       
       channel.subscribe();
       
-      return channel.on(
-        RealtimeListenTypes.broadcast,
-        ChannelFilter(event: 'location_update'),
-      ).stream;
+      return channel.stream();
     } catch (e) {
       if (kDebugMode) {
         print('❌ Erreur création stream de position: $e');

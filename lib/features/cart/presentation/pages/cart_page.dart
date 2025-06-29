@@ -29,14 +29,10 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   String? _selectedZoneId;
   List<Map<String, dynamic>> _deliveryZones = [];
   bool _isPlacingOrder = false;
+  bool _isGettingLocation = false;
   
   // État d'expansion des paniers
   Set<String> _expandedCarts = {};
-  
-  // Coordonnées de localisation
-  double? _userLatitude;
-  double? _userLongitude;
-  bool _isLoadingLocation = false;
 
   @override
   void initState() {
@@ -151,72 +147,6 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
           SnackBar(
             content: Text('Erreur de chargement des zones de livraison: $e'),
             backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    }
-  }
-  
-  Future<void> _getCurrentLocation() async {
-    setState(() {
-      _isLoadingLocation = true;
-    });
-    
-    try {
-      // Demander la permission de localisation
-      final hasPermission = await LocationService.showLocationPermissionDialog(context);
-      if (!hasPermission) {
-        if (mounted) {
-          setState(() {
-            _isLoadingLocation = false;
-          });
-        }
-        return;
-      }
-      
-      // Obtenir la position actuelle
-      final position = await LocationService.getCurrentPosition();
-      if (position != null) {
-        // Obtenir l'adresse à partir des coordonnées
-        final address = await LocationService.getAddressFromCoordinates(
-          position.latitude, 
-          position.longitude
-        );
-        
-        if (mounted) {
-          setState(() {
-            _userLatitude = position.latitude;
-            _userLongitude = position.longitude;
-            if (address != null) {
-              _addressController.text = address;
-            }
-            _isLoadingLocation = false;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isLoadingLocation = false;
-          });
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Impossible d\'obtenir votre position'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingLocation = false;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur de localisation: $e'),
-            backgroundColor: Colors.red,
           ),
         );
       }
@@ -366,6 +296,60 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
     );
   }
   
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isGettingLocation = true;
+    });
+    
+    try {
+      // Vérifier les permissions
+      final hasPermission = await LocationService.checkAndRequestLocationPermission();
+      if (!hasPermission) {
+        if (mounted) {
+          final shouldOpenSettings = await LocationService.showLocationPermissionDialog(context);
+          if (shouldOpenSettings) {
+            await LocationService.openAppSettings();
+          }
+        }
+        setState(() {
+          _isGettingLocation = false;
+        });
+        return;
+      }
+      
+      // Obtenir la position actuelle
+      final position = await LocationService.getCurrentPosition();
+      if (position != null) {
+        // Obtenir l'adresse à partir des coordonnées
+        final address = await LocationService.getAddressFromCoordinates(
+          position.latitude, 
+          position.longitude
+        );
+        
+        if (mounted && address != null) {
+          setState(() {
+            _addressController.text = address;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGettingLocation = false;
+        });
+      }
+    }
+  }
+  
   Future<void> _placeOrder() async {
     if (_addressController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -410,12 +394,14 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
         throw Exception('Utilisateur non connecté');
       }
       
-      // Préparer les données supplémentaires avec les coordonnées
-      Map<String, dynamic>? additionalData;
-      if (_userLatitude != null && _userLongitude != null) {
-        additionalData = {
-          'delivery_latitude': _userLatitude,
-          'delivery_longitude': _userLongitude,
+      // Obtenir la position actuelle si disponible
+      final position = await LocationService.getCurrentPosition();
+      Map<String, dynamic>? locationData;
+      
+      if (position != null) {
+        locationData = {
+          'delivery_latitude': position.latitude,
+          'delivery_longitude': position.longitude,
         };
       }
       
@@ -426,7 +412,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
         deliveryAddress: _addressController.text.trim(),
         deliveryZoneId: _selectedZoneId!,
         deliveryNotes: 'Commande passée via l\'application mobile',
-        additionalData: additionalData,
+        additionalData: locationData,
       );
       
       if (order != null) {
@@ -1299,9 +1285,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 20),
             
-            // Adresse de livraison avec bouton de localisation
+            // Adresse de livraison
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: TextField(
@@ -1318,29 +1303,16 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Container(
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: IconButton(
-                    onPressed: _isLoadingLocation ? null : _getCurrentLocation,
-                    icon: _isLoadingLocation 
-                        ? const SizedBox(
-                            width: 20, 
-                            height: 20, 
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.my_location,
-                            color: Colors.white,
-                          ),
-                    tooltip: 'Utiliser ma position actuelle',
-                  ),
+                IconButton(
+                  onPressed: _isGettingLocation ? null : _getCurrentLocation,
+                  icon: _isGettingLocation 
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location),
+                  tooltip: 'Utiliser ma position actuelle',
                 ),
               ],
             ),

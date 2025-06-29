@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -127,7 +126,8 @@ class LocationService {
         _locationChannel!.subscribe();
       }
 
-      _locationChannel!.send(
+      await _locationChannel!.send(
+        type: RealtimeListenTypes.broadcast,
         event: 'location_update',
         payload: {
           'order_id': orderId,
@@ -155,9 +155,13 @@ class LocationService {
     
     channel.subscribe();
     
-    return channel.stream(
-      event: 'location_update',
-    ).map((payload) => payload.payload as Map<String, dynamic>);
+    return channel.stream().map((payload) {
+      if (payload.eventType == 'broadcast' && 
+          payload.event == 'location_update') {
+        return payload.payload as Map<String, dynamic>;
+      }
+      return <String, dynamic>{};
+    });
   }
 
   /// Arrêter le suivi de la position
@@ -195,6 +199,6 @@ class LocationService {
 
   /// Ouvrir les paramètres de l'application pour activer les permissions
   static Future<void> openAppSettings() async {
-    await openAppSettings();
+    await Geolocator.openAppSettings();
   }
 }
