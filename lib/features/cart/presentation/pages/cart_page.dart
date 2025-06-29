@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/cart_service.dart';
+import '../../../../core/services/delivery_service.dart';
 import '../../../../core/utils/currency_utils.dart';
 
 class CartPage extends StatefulWidget {
@@ -19,6 +20,12 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   double _total = 0.0;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  
+  // Adresse de livraison
+  final TextEditingController _addressController = TextEditingController();
+  String? _selectedZoneId;
+  List<Map<String, dynamic>> _deliveryZones = [];
+  bool _isPlacingOrder = false;
 
   @override
   void initState() {
@@ -31,11 +38,13 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _loadCartItems();
+    _loadDeliveryZones();
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -65,6 +74,30 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
           _errorMessage = e.toString();
           _isLoading = false;
         });
+      }
+    }
+  }
+  
+  Future<void> _loadDeliveryZones() async {
+    try {
+      final zones = await DeliveryService.getActiveDeliveryZones();
+      if (mounted) {
+        setState(() {
+          _deliveryZones = zones.map((zone) => zone.toJson()).toList();
+          if (_deliveryZones.isNotEmpty) {
+            _selectedZoneId = _deliveryZones.first['id'];
+          }
+        });
+      }
+    } catch (e) {
+      // Erreur silencieuse pour ne pas bloquer le chargement du panier
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur de chargement des zones de livraison: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
     }
   }
@@ -156,12 +189,130 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   void _proceedToCheckout() {
     HapticFeedback.mediumImpact();
     
+    if (_cartItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Votre panier est vide'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _buildCheckoutBottomSheet(),
     );
+  }
+  
+  Future<void> _placeOrder() async {
+    if (_addressController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez entrer une adresse de livraison'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    if (_selectedZoneId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez sélectionner une zone de livraison'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    setState(() {
+      _isPlacingOrder = true;
+    });
+    
+    try {
+      // Préparer les items pour la commande
+      final items = _cartItems.map((item) {
+        return {
+          'name': item['cart_name'],
+          'quantity': item['items_count'],
+          'price': _safeToDouble(item['unit_price']),
+          'total': _safeToDouble(item['cart_total_price']),
+          'type': item['cart_reference_type'] ?? 'product',
+          'reference_id': item['cart_reference_id'] ?? item['id'],
+        };
+      }).toList();
+      
+      // Créer la commande
+      final userId = await _getUserId();
+      if (userId == null) {
+        throw Exception('Utilisateur non connecté');
+      }
+      
+      final order = await DeliveryService.createOrderWithDelivery(
+        userId: userId,
+        totalAmount: _total + CurrencyUtils.deliveryFee,
+        items: items,
+        deliveryAddress: _addressController.text.trim(),
+        deliveryZoneId: _selectedZoneId!,
+        deliveryNotes: 'Commande passée via l\'application mobile',
+      );
+      
+      if (order != null) {
+        // Vider le panier après commande réussie
+        await CartService.clearMainCart();
+        
+        if (mounted) {
+          // Fermer la modal
+          Navigator.pop(context);
+          
+          // Afficher un message de succès
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Commande #${order.id.substring(0, 8)} confirmée !'),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Voir',
+                textColor: Colors.white,
+                onPressed: () {
+                  // TODO: Naviguer vers la page de détail de la commande
+                },
+              ),
+            ),
+          );
+          
+          // Recharger le panier (qui sera vide)
+          _loadCartItems();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPlacingOrder = false;
+        });
+      }
+    }
+  }
+  
+  Future<String?> _getUserId() async {
+    try {
+      final user = await CartService._client.auth.currentUser;
+      return user?.id;
+    } catch (e) {
+      return null;
+    }
   }
 
   @override
@@ -418,10 +569,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
           const SizedBox(height: 32),
           ElevatedButton.icon(
             onPressed: () {
-              // TODO: Naviguer vers la page produits
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Navigation vers les produits')),
-              );
+              // Naviguer vers la page produits
+              Navigator.of(context).pushReplacementNamed('/products');
             },
             icon: const Icon(Icons.shopping_bag),
             label: const Text('Découvrir les produits'),
@@ -440,6 +589,29 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   }
 
   Widget _buildCartItem(Map<String, dynamic> item, int index, bool isDark) {
+    // Déterminer le type de panier
+    final cartType = item['cart_reference_type'] ?? 'product';
+    IconData cartIcon;
+    Color cartIconColor;
+    
+    switch (cartType) {
+      case 'personal':
+        cartIcon = Icons.shopping_bag;
+        cartIconColor = Colors.blue;
+        break;
+      case 'recipe':
+        cartIcon = Icons.restaurant_menu;
+        cartIconColor = Colors.green;
+        break;
+      case 'preconfigured':
+        cartIcon = Icons.shopping_basket;
+        cartIconColor = Colors.purple;
+        break;
+      default:
+        cartIcon = Icons.shopping_cart;
+        cartIconColor = AppColors.primary;
+    }
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -457,13 +629,13 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            // Image du produit
+            // Icône du type de panier
             Container(
               width: 80,
               height: 80,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                color: AppColors.primary.withOpacity(0.1),
+                color: cartIconColor.withOpacity(0.1),
               ),
               child: item['image'] != null
                   ? ClipRRect(
@@ -472,24 +644,24 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                         item['image'],
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
-                          return const Icon(
-                            Icons.shopping_bag,
-                            color: AppColors.primary,
+                          return Icon(
+                            cartIcon,
+                            color: cartIconColor,
                             size: 40,
                           );
                         },
                       ),
                     )
-                  : const Icon(
-                      Icons.shopping_bag,
-                      color: AppColors.primary,
+                  : Icon(
+                      cartIcon,
+                      color: cartIconColor,
                       size: 40,
                     ),
             ),
             
             const SizedBox(width: 16),
             
-            // Informations du produit
+            // Informations du panier
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -505,31 +677,36 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  if (item['category'] != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        item['category'],
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w500,
-                        ),
+                  
+                  // Badge type de panier
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: cartIconColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _getCartTypeLabel(cartType),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cartIconColor,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
+                  ),
                   const SizedBox(height: 8),
+                  
+                  // Nombre d'articles
                   Text(
-                    '${CurrencyUtils.formatPrice(_safeToDouble(item['unit_price']))} / unité',
+                    '${_safeToInt(item['items_count'])} article${_safeToInt(item['items_count']) > 1 ? 's' : ''}',
                     style: TextStyle(
                       fontSize: 14,
                       color: AppColors.getTextSecondary(isDark),
                     ),
                   ),
                   const SizedBox(height: 4),
+                  
+                  // Prix total
                   Text(
                     'Total: ${CurrencyUtils.formatPrice(_safeToDouble(item['cart_total_price']))}',
                     style: const TextStyle(
@@ -542,90 +719,39 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
               ),
             ),
             
-            // Contrôles de quantité
-            Column(
-              children: [
-                // Bouton supprimer
-                GestureDetector(
-                  onTap: () => _removeItem(index),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.delete_outline,
-                      color: Colors.red,
-                      size: 20,
-                    ),
-                  ),
+            // Bouton de suppression
+            GestureDetector(
+              onTap: () => _removeItem(index),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                
-                const SizedBox(height: 12),
-                
-                // Contrôles de quantité
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.getBackground(isDark),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: () => _updateQuantity(index, _safeToInt(item['items_count']) - 1),
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.remove,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: 40,
-                        alignment: Alignment.center,
-                        child: Text(
-                          '${_safeToInt(item['items_count'])}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.getTextPrimary(isDark),
-                          ),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => _updateQuantity(index, _safeToInt(item['items_count']) + 1),
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.add,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                child: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.red,
+                  size: 20,
                 ),
-              ],
+              ),
             ),
           ],
         ),
       ),
     );
+  }
+  
+  String _getCartTypeLabel(String cartType) {
+    switch (cartType) {
+      case 'personal':
+        return 'Panier personnel';
+      case 'recipe':
+        return 'Panier recette';
+      case 'preconfigured':
+        return 'Panier préconfiguré';
+      default:
+        return 'Produit';
+    }
   }
 
   Widget _buildCheckoutButton(bool isDark) {
@@ -642,34 +768,99 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
         ],
       ),
       child: SafeArea(
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _cartItems.isNotEmpty ? _proceedToCheckout : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 0,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Résumé des coûts
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.payment, size: 24),
-                const SizedBox(width: 12),
                 Text(
-                  'Commander • ${CurrencyUtils.formatPrice(_total)}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                  'Sous-total:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.getTextSecondary(isDark),
+                  ),
+                ),
+                Text(
+                  CurrencyUtils.formatPrice(_total),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.getTextPrimary(isDark),
                   ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Livraison:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.getTextSecondary(isDark),
+                  ),
+                ),
+                Text(
+                  CurrencyUtils.formatPrice(CurrencyUtils.deliveryFee),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.getTextPrimary(isDark),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Total:',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.getTextPrimary(isDark),
+                  ),
+                ),
+                Text(
+                  CurrencyUtils.formatPrice(_total + CurrencyUtils.deliveryFee),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Bouton commander
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _cartItems.isNotEmpty ? _proceedToCheckout : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Commander',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -715,6 +906,46 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 20),
             
+            // Adresse de livraison
+            TextField(
+              controller: _addressController,
+              decoration: InputDecoration(
+                labelText: 'Adresse de livraison',
+                hintText: 'Entrez votre adresse complète',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.location_on),
+              ),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 16),
+            
+            // Zone de livraison
+            DropdownButtonFormField<String>(
+              value: _selectedZoneId,
+              decoration: InputDecoration(
+                labelText: 'Zone de livraison',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.map),
+              ),
+              items: _deliveryZones.map((zone) {
+                final fee = _safeToDouble(zone['delivery_fee']);
+                return DropdownMenuItem<String>(
+                  value: zone['id'],
+                  child: Text('${zone['name']} (${CurrencyUtils.formatPrice(fee)})'),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedZoneId = value;
+                });
+              },
+            ),
+            const SizedBox(height: 20),
+            
             // Résumé de la commande
             Container(
               padding: const EdgeInsets.all(16),
@@ -730,14 +961,14 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                       Text(
                         'Sous-total:',
                         style: TextStyle(
-                          fontSize: 16,
-                          color: AppColors.getTextPrimary(isDark),
+                          fontSize: 14,
+                          color: AppColors.getTextSecondary(isDark),
                         ),
                       ),
                       Text(
                         CurrencyUtils.formatPrice(_total),
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: AppColors.getTextPrimary(isDark),
                         ),
@@ -751,14 +982,14 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                       Text(
                         'Livraison:',
                         style: TextStyle(
-                          fontSize: 16,
-                          color: AppColors.getTextPrimary(isDark),
+                          fontSize: 14,
+                          color: AppColors.getTextSecondary(isDark),
                         ),
                       ),
                       Text(
                         CurrencyUtils.formatPrice(CurrencyUtils.deliveryFee),
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: AppColors.getTextPrimary(isDark),
                         ),
@@ -772,13 +1003,13 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                       Text(
                         'Total:',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: AppColors.getTextPrimary(isDark),
                         ),
                       ),
                       Text(
-                        CurrencyUtils.formatPrice(CurrencyUtils.calculateTotalWithFees(_total)),
+                        CurrencyUtils.formatPrice(_total + CurrencyUtils.deliveryFee),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -790,14 +1021,66 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            
+            // Méthode de paiement
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.getBackground(isDark),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.payments,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Paiement à la livraison',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.getTextPrimary(isDark),
+                          ),
+                        ),
+                        Text(
+                          'Payez en espèces à la réception',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.getTextSecondary(isDark),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.check_circle,
+                    color: AppColors.primary,
+                  ),
+                ],
+              ),
+            ),
             
             // Boutons
+            const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _isPlacingOrder ? null : () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -815,20 +1098,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Commande confirmée ! 🎉'),
-                          backgroundColor: AppColors.success,
-                        ),
-                      );
-                      // Vider le panier après commande
-                      setState(() {
-                        _cartItems.clear();
-                        _total = 0.0;
-                      });
-                    },
+                    onPressed: _isPlacingOrder ? null : _placeOrder,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
@@ -837,13 +1107,22 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Confirmer',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    child: _isPlacingOrder
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Confirmer la commande',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
               ],

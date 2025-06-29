@@ -92,6 +92,9 @@ class RecettePlusApp extends StatelessWidget {
             theme: _buildLightTheme(),
             darkTheme: _buildDarkTheme(),
             home: const AuthWrapper(),
+            routes: {
+              '/products': (context) => const MainNavigationPage(initialIndex: 1),
+            },
             debugShowCheckedModeBanner: false,
           );
         },
@@ -350,14 +353,19 @@ class _AuthWrapperState extends State<AuthWrapper> {
 }
 
 class MainNavigationPage extends StatefulWidget {
-  const MainNavigationPage({super.key});
+  final int initialIndex;
+  
+  const MainNavigationPage({
+    super.key, 
+    this.initialIndex = 2, // Commencer par la page vidéos (index 2) par défaut
+  });
 
   @override
   State<MainNavigationPage> createState() => _MainNavigationPageState();
 }
 
 class _MainNavigationPageState extends State<MainNavigationPage> {
-  int _selectedIndex = 2; // Commencer par la page vidéos (index 2)
+  late int _selectedIndex;
 
   final List<Widget> _pages = [
     const RecipesPage(),
@@ -366,6 +374,12 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     const CartPage(),
     const ProfilePage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex;
+  }
 
   void _onItemTapped(int index) {
     setState(() {
