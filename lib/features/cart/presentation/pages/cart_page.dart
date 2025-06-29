@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/cart_service.dart';
 import '../../../../core/services/delivery_service.dart';
+import '../../../../core/services/location_service.dart';
 import '../../../../core/utils/currency_utils.dart';
 
 class CartPage extends StatefulWidget {
@@ -31,6 +32,11 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   
   // État d'expansion des paniers
   Set<String> _expandedCarts = {};
+  
+  // Coordonnées de localisation
+  double? _userLatitude;
+  double? _userLongitude;
+  bool _isLoadingLocation = false;
 
   @override
   void initState() {
@@ -145,6 +151,72 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
           SnackBar(
             content: Text('Erreur de chargement des zones de livraison: $e'),
             backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
+  
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isLoadingLocation = true;
+    });
+    
+    try {
+      // Demander la permission de localisation
+      final hasPermission = await LocationService.showLocationPermissionDialog(context);
+      if (!hasPermission) {
+        if (mounted) {
+          setState(() {
+            _isLoadingLocation = false;
+          });
+        }
+        return;
+      }
+      
+      // Obtenir la position actuelle
+      final position = await LocationService.getCurrentPosition();
+      if (position != null) {
+        // Obtenir l'adresse à partir des coordonnées
+        final address = await LocationService.getAddressFromCoordinates(
+          position.latitude, 
+          position.longitude
+        );
+        
+        if (mounted) {
+          setState(() {
+            _userLatitude = position.latitude;
+            _userLongitude = position.longitude;
+            if (address != null) {
+              _addressController.text = address;
+            }
+            _isLoadingLocation = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoadingLocation = false;
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Impossible d\'obtenir votre position'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingLocation = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur de localisation: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -338,6 +410,15 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
         throw Exception('Utilisateur non connecté');
       }
       
+      // Préparer les données supplémentaires avec les coordonnées
+      Map<String, dynamic>? additionalData;
+      if (_userLatitude != null && _userLongitude != null) {
+        additionalData = {
+          'delivery_latitude': _userLatitude,
+          'delivery_longitude': _userLongitude,
+        };
+      }
+      
       final order = await DeliveryService.createOrderWithDelivery(
         userId: userId,
         totalAmount: _total + CurrencyUtils.deliveryFee,
@@ -345,6 +426,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
         deliveryAddress: _addressController.text.trim(),
         deliveryZoneId: _selectedZoneId!,
         deliveryNotes: 'Commande passée via l\'application mobile',
+        additionalData: additionalData,
       );
       
       if (order != null) {
@@ -1217,18 +1299,50 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 20),
             
-            // Adresse de livraison
-            TextField(
-              controller: _addressController,
-              decoration: InputDecoration(
-                labelText: 'Adresse de livraison',
-                hintText: 'Entrez votre adresse complète',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+            // Adresse de livraison avec bouton de localisation
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _addressController,
+                    decoration: InputDecoration(
+                      labelText: 'Adresse de livraison',
+                      hintText: 'Entrez votre adresse complète',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.location_on),
+                    ),
+                    maxLines: 2,
+                  ),
                 ),
-                prefixIcon: const Icon(Icons.location_on),
-              ),
-              maxLines: 2,
+                const SizedBox(width: 8),
+                Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    onPressed: _isLoadingLocation ? null : _getCurrentLocation,
+                    icon: _isLoadingLocation 
+                        ? const SizedBox(
+                            width: 20, 
+                            height: 20, 
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.my_location,
+                            color: Colors.white,
+                          ),
+                    tooltip: 'Utiliser ma position actuelle',
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             

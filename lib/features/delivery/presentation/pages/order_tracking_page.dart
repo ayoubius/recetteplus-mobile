@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'package:latlong2/latlong.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/delivery_service.dart';
+import '../../../../core/services/location_service.dart';
 import '../../../../core/utils/date_utils.dart' as app_date_utils;
 import '../../data/models/order.dart';
 import '../../data/models/order_tracking.dart';
@@ -27,13 +29,25 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   OrderTracking? _tracking;
   List<OrderStatusHistory> _statusHistory = [];
   bool _isLoading = true;
+  bool _isMapFullScreen = false;
   Timer? _refreshTimer;
+  StreamSubscription? _locationSubscription;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  
+  // Coordonnées du livreur
+  double? _deliveryLatitude;
+  double? _deliveryLongitude;
+  
+  // Coordonnées de destination (adresse client)
+  double? _destinationLatitude;
+  double? _destinationLongitude;
 
   @override
   void initState() {
     super.initState();
     _loadOrderData();
+    _subscribeToLocationUpdates();
+    
     // Rafraîchir les données toutes les 30 secondes
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _loadOrderData(silent: true);
@@ -43,6 +57,8 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _locationSubscription?.cancel();
+    DeliveryService.unsubscribeFromOrderTracking();
     super.dispose();
   }
 
@@ -76,8 +92,18 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
           _order = Order.fromJson(orderData);
           _tracking = tracking;
           _statusHistory = statusHistory;
+          
+          // Mettre à jour les coordonnées du livreur si disponibles
+          if (tracking?.currentLatitude != null && tracking?.currentLongitude != null) {
+            _deliveryLatitude = tracking!.currentLatitude;
+            _deliveryLongitude = tracking!.currentLongitude;
+          }
+          
           _isLoading = false;
         });
+        
+        // Essayer de géocoder l'adresse de livraison pour obtenir les coordonnées
+        _geocodeDeliveryAddress();
       }
     } catch (e) {
       if (mounted) {
@@ -96,10 +122,168 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
       }
     }
   }
+  
+  void _subscribeToLocationUpdates() {
+    try {
+      final stream = DeliveryService.getOrderLocationUpdates(widget.orderId);
+      
+      if (stream != null) {
+        _locationSubscription = stream.listen((data) {
+          if (mounted) {
+            setState(() {
+              _deliveryLatitude = data['latitude'];
+              _deliveryLongitude = data['longitude'];
+            });
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Erreur abonnement aux mises à jour de position: $e');
+    }
+  }
+  
+  Future<void> _geocodeDeliveryAddress() async {
+    if (_order?.deliveryAddress == null) return;
+    
+    // Dans une vraie application, vous utiliseriez un service de geocoding
+    // Pour cet exemple, nous utilisons des coordonnées fictives pour Bamako
+    setState(() {
+      _destinationLatitude = 12.6392;
+      _destinationLongitude = -8.0029;
+    });
+  }
+  
+  void _toggleMapFullScreen() {
+    setState(() {
+      _isMapFullScreen = !_isMapFullScreen;
+    });
+    
+    // Ajuster la barre de statut selon le mode
+    if (_isMapFullScreen) {
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+        ),
+      );
+    } else {
+      // Restaurer le style normal
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      SystemChrome.setSystemUIOverlayStyle(
+        SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Mode plein écran pour la carte
+    if (_isMapFullScreen) {
+      return Scaffold(
+        body: Stack(
+          children: [
+            // Carte en plein écran
+            DeliveryMapWidget(
+              latitude: _deliveryLatitude,
+              longitude: _deliveryLongitude,
+              deliveryAddress: _order?.deliveryAddress,
+              destinationLatitude: _destinationLatitude,
+              destinationLongitude: _destinationLongitude,
+              showControls: true,
+            ),
+            
+            // Bouton de retour
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              left: 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                  onPressed: _toggleMapFullScreen,
+                ),
+              ),
+            ),
+            
+            // Informations de la commande
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 16,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Commande #${_order?.id.substring(0, 8) ?? ''}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Statut: ${_order?.statusDisplay ?? ''}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: _getOrderStatusColor(_order?.status ?? ''),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Adresse: ${_order?.deliveryAddress ?? ''}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                      ),
+                    ),
+                    if (_order?.estimatedDeliveryTime != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Livraison estimée: ${app_date_utils.AppDateUtils.formatTime(_order!.estimatedDeliveryTime!)}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     
     return Scaffold(
       key: _scaffoldKey,
@@ -128,7 +312,7 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Carte de suivi (si en cours de livraison)
-                        if (_order!.isInTransit && _tracking != null)
+                        if (_order!.isInTransit)
                           _buildDeliveryMapCard(isDark),
                         
                         // Informations de la commande
@@ -191,29 +375,46 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   }
 
   Widget _buildDeliveryMapCard(bool isDark) {
-    return Container(
-      width: double.infinity,
-      height: 300,
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.getCardBackground(isDark),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.getShadow(isDark),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return Stack(
+      children: [
+        Container(
+          width: double.infinity,
+          height: 300,
+          margin: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.getCardBackground(isDark),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.getShadow(isDark),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: DeliveryMapWidget(
-          latitude: _tracking?.currentLatitude,
-          longitude: _tracking?.currentLongitude,
-          deliveryAddress: _order?.deliveryAddress,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: DeliveryMapWidget(
+              latitude: _deliveryLatitude,
+              longitude: _deliveryLongitude,
+              deliveryAddress: _order?.deliveryAddress,
+              destinationLatitude: _destinationLatitude,
+              destinationLongitude: _destinationLongitude,
+            ),
+          ),
         ),
-      ),
+        
+        // Bouton plein écran
+        Positioned(
+          top: 24,
+          right: 24,
+          child: FloatingActionButton.small(
+            onPressed: _toggleMapFullScreen,
+            backgroundColor: AppColors.primary,
+            child: const Icon(Icons.fullscreen),
+          ),
+        ),
+      ],
     );
   }
 
@@ -348,18 +549,24 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  // Ouvrir la carte en plein écran ou appeler le livreur
-                  HapticFeedback.mediumImpact();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Fonctionnalité à venir'),
-                      backgroundColor: AppColors.primary,
-                    ),
-                  );
+                onPressed: () async {
+                  // Vérifier les permissions de localisation
+                  final hasPermission = await LocationService.checkAndRequestLocationPermission();
+                  if (!hasPermission) {
+                    if (mounted) {
+                      final shouldOpenSettings = await LocationService.showLocationPermissionDialog(context);
+                      if (shouldOpenSettings) {
+                        await LocationService.openAppSettings();
+                      }
+                    }
+                    return;
+                  }
+                  
+                  // Ouvrir la carte en plein écran
+                  _toggleMapFullScreen();
                 },
-                icon: const Icon(Icons.phone),
-                label: const Text('Contacter le livreur'),
+                icon: const Icon(Icons.map),
+                label: const Text('Voir la carte en plein écran'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -721,5 +928,18 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
         ),
       ),
     );
+  }
+  
+  Color _getOrderStatusColor(String status) {
+    switch (status) {
+      case 'pending': return Colors.grey;
+      case 'confirmed': return Colors.blue;
+      case 'preparing': return Colors.orange;
+      case 'ready_for_pickup': return Colors.amber;
+      case 'out_for_delivery': return Colors.purple;
+      case 'delivered': return Colors.green;
+      case 'cancelled': return Colors.red;
+      default: return Colors.grey;
+    }
   }
 }

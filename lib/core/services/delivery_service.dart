@@ -8,6 +8,7 @@ import '../../features/delivery/data/models/order.dart';
 
 class DeliveryService {
   static final SupabaseClient _client = Supabase.instance.client;
+  static RealtimeChannel? _orderTrackingChannel;
 
   // ==================== LIVREURS ====================
   
@@ -404,26 +405,35 @@ class DeliveryService {
     required String deliveryAddress,
     required String deliveryZoneId,
     String? deliveryNotes,
+    Map<String, dynamic>? additionalData,
   }) async {
     try {
       // Récupérer les frais de livraison pour la zone
       final zone = await getDeliveryZoneById(deliveryZoneId);
       if (zone == null) throw Exception('Zone de livraison non trouvée');
 
+      // Préparer les données de la commande
+      final orderData = {
+        'user_id': userId,
+        'total_amount': totalAmount,
+        'status': 'pending',
+        'items': items,
+        'delivery_address': deliveryAddress,
+        'delivery_zone_id': deliveryZoneId,
+        'delivery_fee': zone.deliveryFee,
+        'delivery_notes': deliveryNotes,
+        'created_at': DateTime.now().toIso8601String(),
+      };
+      
+      // Ajouter les données supplémentaires si fournies
+      if (additionalData != null) {
+        orderData.addAll(additionalData);
+      }
+
       // Créer la commande
       final response = await _client
           .from('orders')
-          .insert({
-            'user_id': userId,
-            'total_amount': totalAmount,
-            'status': 'pending',
-            'items': items,
-            'delivery_address': deliveryAddress,
-            'delivery_zone_id': deliveryZoneId,
-            'delivery_fee': zone.deliveryFee,
-            'delivery_notes': deliveryNotes,
-            'created_at': DateTime.now().toIso8601String(),
-          })
+          .insert(orderData)
           .select()
           .single();
 
@@ -432,10 +442,76 @@ class DeliveryService {
       // Générer un code QR pour la commande
       await generateOrderQRCode(order.id);
       
+      // Créer un canal de suivi en temps réel pour cette commande
+      _subscribeToOrderTracking(order.id);
+      
       return order;
     } catch (e) {
       if (kDebugMode) {
         print('❌ Erreur création commande: $e');
+      }
+      return null;
+    }
+  }
+  
+  /// S'abonner aux mises à jour de suivi d'une commande
+  static void _subscribeToOrderTracking(String orderId) {
+    try {
+      // Fermer le canal précédent s'il existe
+      _orderTrackingChannel?.unsubscribe();
+      
+      // Créer un nouveau canal
+      _orderTrackingChannel = _client.channel('order_tracking:$orderId');
+      
+      // S'abonner aux mises à jour
+      _orderTrackingChannel!.on(
+        RealtimeListenTypes.presence,
+        ChannelFilter(event: 'status_change'),
+        (payload, [ref]) {
+          if (kDebugMode) {
+            print('📡 Mise à jour statut commande: $payload');
+          }
+        },
+      ).on(
+        RealtimeListenTypes.presence,
+        ChannelFilter(event: 'location_update'),
+        (payload, [ref]) {
+          if (kDebugMode) {
+            print('📡 Mise à jour position livreur: $payload');
+          }
+        },
+      ).subscribe();
+      
+      if (kDebugMode) {
+        print('✅ Abonnement au suivi de la commande $orderId');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Erreur abonnement suivi commande: $e');
+      }
+    }
+  }
+  
+  /// Se désabonner du suivi d'une commande
+  static void unsubscribeFromOrderTracking() {
+    _orderTrackingChannel?.unsubscribe();
+    _orderTrackingChannel = null;
+  }
+  
+  /// Obtenir un stream de mises à jour de position pour une commande
+  static Stream<dynamic>? getOrderLocationUpdates(String orderId) {
+    try {
+      final channel = _client.channel('order_tracking:$orderId');
+      
+      channel.subscribe();
+      
+      return channel.on(
+        RealtimeListenTypes.broadcast,
+        ChannelFilter(event: 'location_update'),
+      ).stream;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Erreur création stream de position: $e');
       }
       return null;
     }
