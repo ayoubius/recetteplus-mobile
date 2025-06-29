@@ -167,7 +167,7 @@ class DeliveryService {
           .from('orders')
           .select('*, profiles(*), delivery_zones(*)')
           .or('status.eq.confirmed,status.eq.preparing,status.eq.ready_for_pickup')
-          .is_('delivery_person_id', null)
+          .filter('delivery_person_id', 'is', null)
           .order('created_at', ascending: true);
 
       return List<Map<String, dynamic>>.from(response);
