@@ -9,6 +9,7 @@ import '../../features/delivery/data/models/order.dart';
 class DeliveryService {
   static final SupabaseClient _client = Supabase.instance.client;
   static RealtimeChannel? _orderTrackingChannel;
+  static RealtimeChannel? _orderStatusChannel; // Channel for order status updates. Potentially a map if managing multiple.
 
   // ==================== LIVREURS ====================
   
@@ -494,9 +495,90 @@ class DeliveryService {
   static void unsubscribeFromOrderTracking() {
     _orderTrackingChannel?.unsubscribe();
     _orderTrackingChannel = null;
+    // Also ensure the new status channel is managed if needed globally, or per instance
+  }
+
+  /// S'abonner aux mises à jour de statut d'une commande spécifique via Supabase Realtime.
+  ///
+  /// Crée un canal qui écoute les événements UPDATE sur la table 'orders'
+  /// pour l'orderId spécifié.
+  ///
+  /// @param orderId L'ID de la commande à suivre.
+  /// @param callback Fonction appelée avec les nouvelles données de la commande lors d'une mise à jour.
+  /// @return Le RealtimeChannel configuré pour cette souscription.
+  static RealtimeChannel subscribeToOrderStatusUpdates(
+    String orderId,
+    void Function(Map<String, dynamic> newOrderData) callback
+  ) {
+    // Ensure previous channel for this specific purpose (if any global one) is closed,
+    // or manage channels per orderId if multiple subscriptions are needed.
+    // For simplicity, let's assume one main status subscription at a time or unique channels.
+    final channelName = 'order_status_updates_$orderId';
+
+    // If a channel with this name already exists, unsubscribe first.
+    // This is a simple cleanup. More robust management might be needed for multiple listeners.
+    final existingChannels = _client.getChannels().where((ch) => ch.topic == 'realtime:public:orders:id=eq.$orderId');
+    for (final ch in existingChannels) {
+        _client.removeChannel(ch);
+    }
+
+    _orderStatusChannel = _client
+        .channel(channelName)
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update, // Listen for updates
+          schema: 'public',
+          table: 'orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: orderId,
+          ),
+          callback: (payload) {
+            if (kDebugMode) {
+              print('🔄 Mise à jour statut commande reçue: ${payload.newRecord}');
+            }
+            callback(payload.newRecord);
+          },
+        )
+        .subscribe((status, [_]) {
+            if (status == 'SUBSCRIBED') {
+                print('✅ SUBSCRIBED to order status updates for $orderId');
+            } else {
+                print('ℹ️ Order status subscription changed: $status for $orderId');
+            }
+        });
+    return _orderStatusChannel!;
+  }
+
+  /// Se désabonner des mises à jour de statut pour une commande spécifique.
+  ///
+  /// @param orderId L'ID de la commande dont la souscription doit être arrêtée.
+  static void unsubscribeFromOrderStatusUpdates(String orderId) {
+    // This is a simplified unsubscription. Assumes channel name matches the convention.
+    // More robust channel management might involve storing channel instances.
+    final channelName = 'order_status_updates_$orderId';
+    try {
+      final List<RealtimeChannel> channels = _client.getChannels();
+      final channelToRemove = channels.firstWhere(
+            (ch) => ch.topic == channelName || (ch.topic.startsWith("realtime:public:orders") && ch.topic.contains("id=eq.$orderId")), // More robust check
+            // orElse: () => null, // Dart doesn't have orElse: () => null for firstWhere without a non-nullable return
+      );
+       _client.removeChannel(channelToRemove);
+      if (kDebugMode) {
+        print('🛑 Unsubscribed and removed channel for order status updates: $channelName');
+      }
+    } catch (e) {
+      // Channel not found or already removed, which is fine.
+      if (kDebugMode) {
+        print('ℹ️ Attempted to unsubscribe from non-existent or already removed order status channel for $orderId: $e');
+      }
+    }
   }
   
   /// Obtenir un stream de mises à jour de position pour une commande
+  /// Note: This method seems to return a channel that listens to 'order_tracking' table,
+  /// which is also what _subscribeToOrderTracking does.
+  /// LocationService.subscribeToDeliveryUpdates is used by client app for broadcasted locations.
   static RealtimeChannel? getOrderLocationUpdates(String orderId) {
     try {
       final channel = _client

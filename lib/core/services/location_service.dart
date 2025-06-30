@@ -102,9 +102,15 @@ class LocationService {
     );
   }
 
-  /// Mettre à jour la position du livreur en temps réel via Supabase Realtime
+  /// Mettre à jour la position du livreur en temps réel via Supabase Realtime.
+  ///
+  /// Appelle une fonction RPC Supabase ('update_delivery_location') et diffuse également
+  /// la nouvelle position sur un canal Supabase Realtime (`delivery_tracking_$orderId`)
+  /// avec l'événement 'location_update'.
+  ///
+  /// @param orderId L'ID de la commande, utilisé pour nommer le canal de diffusion.
   static Future<void> updateDeliveryLocation({
-    required String orderId,
+    required String orderId, // Used for channel naming
     required String trackingId,
     required double latitude,
     required double longitude,
@@ -148,38 +154,56 @@ class LocationService {
     }
   }
 
-  /// S'abonner aux mises à jour de position d'un livreur
+  /// S'abonner aux mises à jour de position d'un livreur diffusées via Supabase Realtime.
+  ///
+  /// S'abonne au canal `delivery_tracking_$orderId` pour l'événement 'location_update'.
+  ///
+  /// @param orderId L'ID de la commande pour laquelle s'abonner aux mises à jour.
+  /// @return Un Stream qui émet les données de payload des messages de localisation reçus.
   static Stream<Map<String, dynamic>> subscribeToDeliveryUpdates(String orderId) {
-    final channel = _client.channel('delivery_tracking_$orderId');
-    
-    // S'abonner aux messages broadcast
-    channel.onBroadcast(
+    _locationChannel?.unsubscribe(); // Ensure previous channel for this service is closed.
+                                  // Consider more granular channel management if service handles multiple subscriptions.
+
+    _locationChannel = _client.channel('delivery_tracking_$orderId');
+    final StreamController<Map<String, dynamic>> streamController = StreamController.broadcast();
+
+    _locationChannel!.onBroadcast(
       event: 'location_update',
-      callback: (payload) {
+      callback: (payload, [_]) { // Supabase SDK may pass an optional second arg
         if (kDebugMode) {
-          print('📍 Mise à jour de position reçue: $payload');
+          print('📍 Mise à jour de position reçue (broadcast): $payload');
+        }
+        if (payload != null) {
+          streamController.add(payload as Map<String, dynamic>);
         }
       },
-    );
-    
-    channel.subscribe();
-    
-    // Retourner un stream simulé pour la compatibilité
-    // Dans une vraie implémentation, vous devriez utiliser un StreamController
-    return Stream.periodic(const Duration(seconds: 5), (count) {
-      return {
-        'order_id': orderId,
-        'latitude': 12.6392 + (count * 0.001),
-        'longitude': -8.0029 + (count * 0.001),
-        'timestamp': DateTime.now().toIso8601String(),
-      };
+    ).subscribe((status, [_]) {
+      if (status == 'SUBSCRIBED') {
+        if (kDebugMode) print('✅ Subscribed to location broadcast for order $orderId');
+      } else if (status == 'CLOSED') {
+        if (kDebugMode) print('ℹ️ Location broadcast channel closed for order $orderId');
+        // streamController.close(); // Close stream if channel closes permanently
+      } else {
+        if (kDebugMode) print('ℹ️ Location broadcast subscription status for $orderId: $status');
+      }
+    }, (e) {
+       if (kDebugMode) print('❌ Error on location broadcast subscription for $orderId: $e');
+       streamController.addError(e); // Propagate error to stream listeners
     });
+
+    return streamController.stream;
   }
 
-  /// Arrêter le suivi de la position
+  /// Arrêter le suivi de la position et se désabonner du canal de diffusion.
+  ///
+  /// Ceci est principalement utilisé pour nettoyer la souscription Realtime.
   static void stopLocationTracking() {
     _locationChannel?.unsubscribe();
+    // _client.removeChannel(_locationChannel); // Optional: if you want to fully remove it from client's list
     _locationChannel = null;
+    if (kDebugMode) {
+      print('🛑 Location tracking and broadcast subscription stopped.');
+    }
   }
 
   /// Afficher une boîte de dialogue pour demander la permission de localisation

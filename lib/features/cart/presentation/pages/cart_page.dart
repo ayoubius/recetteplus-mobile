@@ -27,6 +27,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   // Adresse de livraison
   final TextEditingController _addressController = TextEditingController();
   String? _selectedZoneId;
+  double _selectedDeliveryFee = CurrencyUtils.deliveryFee; // Initialize with default
   List<Map<String, dynamic>> _deliveryZones = [];
   bool _isPlacingOrder = false;
   bool _isGettingLocation = false;
@@ -137,11 +138,22 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
           _deliveryZones = zones.map((zone) => zone.toJson()).toList();
           if (_deliveryZones.isNotEmpty) {
             _selectedZoneId = _deliveryZones.first['id'];
+            // Set initial delivery fee based on the first zone
+            _selectedDeliveryFee = _safeToDouble(_deliveryZones.first['delivery_fee']);
+          } else {
+            // Fallback if no zones, though ideally this shouldn't happen if zones are required
+            _selectedDeliveryFee = CurrencyUtils.deliveryFee;
           }
         });
       }
     } catch (e) {
       // Erreur silencieuse pour ne pas bloquer le chargement du panier
+      if (mounted) {
+        // Still set a default fee if zones fail to load
+        setState(() {
+          _selectedDeliveryFee = CurrencyUtils.deliveryFee;
+        });
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -404,10 +416,16 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
           'delivery_longitude': position.longitude,
         };
       }
+
+      // Ensure _selectedDeliveryFee is up-to-date if a zone is selected
+      final currentDeliveryFee = _deliveryZones
+          .firstWhere((zone) => zone['id'] == _selectedZoneId, orElse: () => {'delivery_fee': CurrencyUtils.deliveryFee})
+          ['delivery_fee'];
+      _selectedDeliveryFee = _safeToDouble(currentDeliveryFee);
       
       final order = await DeliveryService.createOrderWithDelivery(
         userId: userId,
-        totalAmount: _total + CurrencyUtils.deliveryFee,
+        totalAmount: _total + _selectedDeliveryFee, // Use the selected delivery fee
         items: items,
         deliveryAddress: _addressController.text.trim(),
         deliveryZoneId: _selectedZoneId!,
@@ -433,7 +451,12 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                 label: 'Voir',
                 textColor: Colors.white,
                 onPressed: () {
-                  // TODO: Naviguer vers la page de détail de la commande
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => OrderTrackingPage(orderId: order.id),
+                    ),
+                  );
                 },
               ),
             ),
@@ -1183,7 +1206,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                   ),
                 ),
                 Text(
-                  CurrencyUtils.formatPrice(CurrencyUtils.deliveryFee),
+                  CurrencyUtils.formatPrice(_selectedDeliveryFee), // Use dynamic fee
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -1205,7 +1228,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                   ),
                 ),
                 Text(
-                  CurrencyUtils.formatPrice(_total + CurrencyUtils.deliveryFee),
+                  CurrencyUtils.formatPrice(_total + _selectedDeliveryFee), // Use dynamic fee
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -1338,6 +1361,15 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
               onChanged: (value) {
                 setState(() {
                   _selectedZoneId = value;
+                  if (value != null) {
+                    final selectedZoneData = _deliveryZones.firstWhere(
+                      (zone) => zone['id'] == value,
+                      orElse: () => {'delivery_fee': CurrencyUtils.deliveryFee} // Fallback
+                    );
+                    _selectedDeliveryFee = _safeToDouble(selectedZoneData['delivery_fee']);
+                  } else {
+                    _selectedDeliveryFee = CurrencyUtils.deliveryFee; // Fallback if no zone selected
+                  }
                 });
               },
             ),
@@ -1384,7 +1416,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                         ),
                       ),
                       Text(
-                        CurrencyUtils.formatPrice(CurrencyUtils.deliveryFee),
+                        CurrencyUtils.formatPrice(_selectedDeliveryFee), // Use dynamic fee
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -1406,7 +1438,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                         ),
                       ),
                       Text(
-                        CurrencyUtils.formatPrice(_total + CurrencyUtils.deliveryFee),
+                        CurrencyUtils.formatPrice(_total + _selectedDeliveryFee), // Use dynamic fee
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
