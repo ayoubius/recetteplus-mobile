@@ -1,3 +1,4 @@
+import 'dart:async'; // Import for StreamController
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -169,26 +170,31 @@ class LocationService {
 
     _locationChannel!.onBroadcast(
       event: 'location_update',
-      callback: (payload, [_]) { // Supabase SDK may pass an optional second arg
+      callback: (payload, [_]) {
         if (kDebugMode) {
           print('📍 Mise à jour de position reçue (broadcast): $payload');
         }
-        if (payload != null) {
-          streamController.add(payload as Map<String, dynamic>);
+        // payload can be null, ensure to handle it or ensure it's Map<String, dynamic>
+        if (payload is Map<String, dynamic>) {
+          streamController.add(payload);
+        } else if (payload != null) {
+          // If payload is not null but not a map, it's unexpected. Log or handle.
+           if (kDebugMode) print('⚠️ Unexpected payload type: ${payload.runtimeType}');
         }
       },
-    ).subscribe((status, [_]) {
-      if (status == 'SUBSCRIBED') {
+    ).subscribe((status, [dynamic error]) { // Make error parameter optional and typed
+      if (status == RealtimeSubscribeStatus.subscribed) {
         if (kDebugMode) print('✅ Subscribed to location broadcast for order $orderId');
-      } else if (status == 'CLOSED') {
+      } else if (status == RealtimeSubscribeStatus.closed) {
         if (kDebugMode) print('ℹ️ Location broadcast channel closed for order $orderId');
-        // streamController.close(); // Close stream if channel closes permanently
-      } else {
+        // streamController.close(); // Consider if stream should close when channel closes.
+      } else if (status == RealtimeSubscribeStatus.channelError || status == RealtimeSubscribeStatus.postgresChangesError) {
+        if (kDebugMode) print('❌ Error on location broadcast subscription for $orderId: $status, Error: $error');
+        if (error != null) streamController.addError(error); else streamController.addError(Exception('Channel error: $status'));
+      }
+       else {
         if (kDebugMode) print('ℹ️ Location broadcast subscription status for $orderId: $status');
       }
-    }, (e) {
-       if (kDebugMode) print('❌ Error on location broadcast subscription for $orderId: $e');
-       streamController.addError(e); // Propagate error to stream listeners
     });
 
     return streamController.stream;
