@@ -6,6 +6,7 @@ import '../../../../core/services/cart_service.dart';
 import '../../../../core/services/delivery_service.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/utils/currency_utils.dart';
+import '../../../delivery/presentation/pages/order_tracking_page.dart';
 
 class CartPage extends StatefulWidget {
   const CartPage({super.key});
@@ -23,15 +24,16 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   double _total = 0.0;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  
+
   // Adresse de livraison
   final TextEditingController _addressController = TextEditingController();
   String? _selectedZoneId;
-  double _selectedDeliveryFee = CurrencyUtils.deliveryFee; // Initialize with default
+  double _selectedDeliveryFee =
+      CurrencyUtils.deliveryFee; // Initialize with default
   List<Map<String, dynamic>> _deliveryZones = [];
   bool _isPlacingOrder = false;
   bool _isGettingLocation = false;
-  
+
   // État d'expansion des paniers
   Set<String> _expandedCarts = {};
 
@@ -66,10 +68,10 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
     try {
       final items = await CartService.getMainCartItems();
       final total = await CartService.calculateMainCartTotal();
-      
+
       // Charger les détails des paniers
       await _loadCartDetails(items);
-      
+
       if (mounted) {
         setState(() {
           _cartItems = items;
@@ -88,21 +90,22 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       }
     }
   }
-  
+
   Future<void> _loadCartDetails(List<Map<String, dynamic>> cartItems) async {
     List<Map<String, dynamic>> details = [];
-    
+
     for (var item in cartItems) {
       final cartType = item['cart_reference_type'] ?? '';
       final cartId = item['cart_reference_id'];
-      
+
       if (cartId != null) {
         try {
           List<Map<String, dynamic>> itemDetails = [];
-          
+
           if (cartType == 'personal') {
             // Charger les détails du panier personnel
-            final personalItems = await CartService.getPersonalCartItems(cartId);
+            final personalItems =
+                await CartService.getPersonalCartItems(cartId);
             itemDetails = personalItems;
           } else if (cartType == 'recipe') {
             // Charger les détails du panier recette
@@ -110,10 +113,11 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
             itemDetails = recipeItems;
           } else if (cartType == 'preconfigured') {
             // Charger les détails du panier préconfiguré
-            final preconfiguredItems = await CartService.getPreconfiguredCartItems(cartId);
+            final preconfiguredItems =
+                await CartService.getPreconfiguredCartItems(cartId);
             itemDetails = preconfiguredItems;
           }
-          
+
           details.add({
             'cart_id': cartId,
             'cart_type': cartType,
@@ -124,12 +128,12 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
         }
       }
     }
-    
+
     setState(() {
       _expandedCartDetails = details;
     });
   }
-  
+
   Future<void> _loadDeliveryZones() async {
     try {
       final zones = await DeliveryService.getActiveDeliveryZones();
@@ -139,7 +143,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
           if (_deliveryZones.isNotEmpty) {
             _selectedZoneId = _deliveryZones.first['id'];
             // Set initial delivery fee based on the first zone
-            _selectedDeliveryFee = _safeToDouble(_deliveryZones.first['delivery_fee']);
+            _selectedDeliveryFee =
+                _safeToDouble(_deliveryZones.first['delivery_fee']);
           } else {
             // Fallback if no zones, though ideally this shouldn't happen if zones are required
             _selectedDeliveryFee = CurrencyUtils.deliveryFee;
@@ -189,15 +194,17 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
 
   Future<void> _removeItem(int index) async {
     HapticFeedback.mediumImpact();
-    
+
     final removedItem = _cartItems[index];
-    
+
     try {
       // Supprimer de la base de données si c'est un vrai item
-      if (removedItem['id'] != null && removedItem['id'] is String && removedItem['id'].length > 5) {
+      if (removedItem['id'] != null &&
+          removedItem['id'] is String &&
+          removedItem['id'].length > 5) {
         await CartService.removeFromMainCart(removedItem['id']);
       }
-      
+
       setState(() {
         _cartItems.removeAt(index);
         _total -= _safeToDouble(removedItem['cart_total_price']);
@@ -229,21 +236,22 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _updateProductQuantity(String cartId, String productId, int newQuantity) async {
+  Future<void> _updateProductQuantity(
+      String cartId, String productId, int newQuantity) async {
     if (newQuantity <= 0) {
       _removeProductFromCart(cartId, productId);
       return;
     }
 
     HapticFeedback.lightImpact();
-    
+
     try {
       await CartService.updateProductQuantity(
         cartId: cartId,
         productId: productId,
         quantity: newQuantity,
       );
-      
+
       // Recharger les paniers pour refléter les changements
       _loadCartItems();
     } catch (e) {
@@ -255,16 +263,16 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       );
     }
   }
-  
+
   Future<void> _removeProductFromCart(String cartId, String productId) async {
     HapticFeedback.mediumImpact();
-    
+
     try {
       await CartService.removeProductFromCart(
         cartId: cartId,
         productId: productId,
       );
-      
+
       // Recharger les paniers pour refléter les changements
       _loadCartItems();
     } catch (e) {
@@ -289,7 +297,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
 
   void _proceedToCheckout() {
     HapticFeedback.mediumImpact();
-    
+
     if (_cartItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -299,7 +307,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       );
       return;
     }
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -307,18 +315,20 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       builder: (context) => _buildCheckoutBottomSheet(),
     );
   }
-  
+
   Future<void> _getCurrentLocation() async {
     setState(() {
       _isGettingLocation = true;
     });
-    
+
     try {
       // Vérifier les permissions
-      final hasPermission = await LocationService.checkAndRequestLocationPermission();
+      final hasPermission =
+          await LocationService.checkAndRequestLocationPermission();
       if (!hasPermission) {
         if (mounted) {
-          final shouldOpenSettings = await LocationService.showLocationPermissionDialog(context);
+          final shouldOpenSettings =
+              await LocationService.showLocationPermissionDialog(context);
           if (shouldOpenSettings) {
             await LocationService.openAppSettings();
           }
@@ -328,16 +338,14 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
         });
         return;
       }
-      
+
       // Obtenir la position actuelle
       final position = await LocationService.getCurrentPosition();
       if (position != null) {
         // Obtenir l'adresse à partir des coordonnées
         final address = await LocationService.getAddressFromCoordinates(
-          position.latitude, 
-          position.longitude
-        );
-        
+            position.latitude, position.longitude);
+
         if (mounted && address != null) {
           setState(() {
             _addressController.text = address;
@@ -361,7 +369,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       }
     }
   }
-  
+
   Future<void> _placeOrder() async {
     if (_addressController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -372,7 +380,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       );
       return;
     }
-    
+
     if (_selectedZoneId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -382,11 +390,11 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       );
       return;
     }
-    
+
     setState(() {
       _isPlacingOrder = true;
     });
-    
+
     try {
       // Préparer les items pour la commande
       final items = _cartItems.map((item) {
@@ -399,17 +407,17 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
           'reference_id': item['cart_reference_id'] ?? item['id'],
         };
       }).toList();
-      
+
       // Créer la commande
       final userId = await _getUserId();
       if (userId == null) {
         throw Exception('Utilisateur non connecté');
       }
-      
+
       // Obtenir la position actuelle si disponible
       final position = await LocationService.getCurrentPosition();
       Map<String, dynamic>? locationData;
-      
+
       if (position != null) {
         locationData = {
           'delivery_latitude': position.latitude,
@@ -418,33 +426,36 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       }
 
       // Ensure _selectedDeliveryFee is up-to-date if a zone is selected
-      final currentDeliveryFee = _deliveryZones
-          .firstWhere((zone) => zone['id'] == _selectedZoneId, orElse: () => {'delivery_fee': CurrencyUtils.deliveryFee})
-          ['delivery_fee'];
+      final currentDeliveryFee = _deliveryZones.firstWhere(
+          (zone) => zone['id'] == _selectedZoneId,
+          orElse: () =>
+              {'delivery_fee': CurrencyUtils.deliveryFee})['delivery_fee'];
       _selectedDeliveryFee = _safeToDouble(currentDeliveryFee);
-      
+
       final order = await DeliveryService.createOrderWithDelivery(
         userId: userId,
-        totalAmount: _total + _selectedDeliveryFee, // Use the selected delivery fee
+        totalAmount:
+            _total + _selectedDeliveryFee, // Use the selected delivery fee
         items: items,
         deliveryAddress: _addressController.text.trim(),
         deliveryZoneId: _selectedZoneId!,
         deliveryNotes: 'Commande passée via l\'application mobile',
         additionalData: locationData,
       );
-      
+
       if (order != null) {
         // Vider le panier après commande réussie
         await CartService.clearMainCart();
-        
+
         if (mounted) {
           // Fermer la modal
           Navigator.pop(context);
-          
+
           // Afficher un message de succès
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Commande #${order.id.substring(0, 8)} confirmée !'),
+              content:
+                  Text('Commande #${order.id.substring(0, 8)} confirmée !'),
               backgroundColor: AppColors.success,
               duration: const Duration(seconds: 5),
               action: SnackBarAction(
@@ -454,14 +465,15 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => OrderTrackingPage(orderId: order.id),
+                      builder: (context) =>
+                          OrderTrackingPage(orderId: order.id),
                     ),
                   );
                 },
               ),
             ),
           );
-          
+
           // Recharger le panier (qui sera vide)
           _loadCartItems();
         }
@@ -483,7 +495,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       }
     }
   }
-  
+
   Future<String?> _getUserId() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
@@ -496,7 +508,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Scaffold(
       backgroundColor: AppColors.getBackground(isDark),
       appBar: AppBar(
@@ -518,14 +530,16 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                     ),
                     content: Text(
                       'Êtes-vous sûr de vouloir vider votre panier ?',
-                      style: TextStyle(color: AppColors.getTextSecondary(isDark)),
+                      style:
+                          TextStyle(color: AppColors.getTextSecondary(isDark)),
                     ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
                         child: Text(
                           'Annuler',
-                          style: TextStyle(color: AppColors.getTextSecondary(isDark)),
+                          style: TextStyle(
+                              color: AppColors.getTextSecondary(isDark)),
                         ),
                       ),
                       TextButton(
@@ -548,7 +562,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                             );
                           }
                         },
-                        child: const Text('Vider', style: TextStyle(color: Colors.red)),
+                        child: const Text('Vider',
+                            style: TextStyle(color: Colors.red)),
                       ),
                     ],
                   ),
@@ -570,11 +585,12 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                         children: [
                           // Header avec résumé
                           _buildCartHeader(isDark),
-                          
+
                           // Liste des articles
                           Expanded(
                             child: ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
                               itemCount: _cartItems.length,
                               itemBuilder: (context, index) {
                                 final item = _cartItems[index];
@@ -582,7 +598,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                               },
                             ),
                           ),
-                          
+
                           // Bouton de commande
                           _buildCheckoutButton(isDark),
                         ],
@@ -622,8 +638,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              _errorMessage.isNotEmpty 
-                  ? _errorMessage 
+              _errorMessage.isNotEmpty
+                  ? _errorMessage
                   : 'Impossible de charger votre panier. Veuillez vérifier votre connexion.',
               style: TextStyle(
                 fontSize: 16,
@@ -776,10 +792,10 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
     final cartType = item['cart_reference_type'] ?? 'product';
     final cartId = item['cart_reference_id'] ?? '';
     final isExpanded = _expandedCarts.contains(cartId);
-    
+
     IconData cartIcon;
     Color cartIconColor;
-    
+
     switch (cartType) {
       case 'personal':
         cartIcon = Icons.shopping_bag;
@@ -797,15 +813,15 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
         cartIcon = Icons.shopping_cart;
         cartIconColor = AppColors.primary;
     }
-    
+
     // Trouver les détails du panier
     final cartDetails = _expandedCartDetails.firstWhere(
       (detail) => detail['cart_id'] == cartId,
       orElse: () => {'items': []},
     );
-    
+
     final cartItems = cartDetails['items'] as List<dynamic>? ?? [];
-    
+
     return Column(
       children: [
         // En-tête du panier
@@ -864,9 +880,9 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                             size: 30,
                           ),
                   ),
-                  
+
                   const SizedBox(width: 16),
-                  
+
                   // Informations du panier
                   Expanded(
                     child: Column(
@@ -874,7 +890,9 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                       children: [
                         Text(
                           // Pour le panier personnel, simplifier le nom
-                          cartType == 'personal' ? 'Panier personnel' : (item['cart_name'] ?? 'Article'),
+                          cartType == 'personal'
+                              ? 'Panier personnel'
+                              : (item['cart_name'] ?? 'Article'),
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -884,11 +902,12 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
-                        
+
                         // Badge type de panier - seulement pour les types non-personnel
                         if (cartType != 'personal')
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: cartIconColor.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
@@ -903,7 +922,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                             ),
                           ),
                         const SizedBox(height: 8),
-                        
+
                         // Nombre d'articles et prix
                         Row(
                           children: [
@@ -916,7 +935,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                             ),
                             const Spacer(),
                             Text(
-                              CurrencyUtils.formatPrice(_safeToDouble(item['cart_total_price'])),
+                              CurrencyUtils.formatPrice(
+                                  _safeToDouble(item['cart_total_price'])),
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -928,7 +948,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-                  
+
                   // Boutons d'action
                   Column(
                     children: [
@@ -951,7 +971,9 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                       const SizedBox(height: 8),
                       // Indicateur d'expansion
                       Icon(
-                        isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        isExpanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
                         color: AppColors.getTextSecondary(isDark),
                       ),
                     ],
@@ -961,7 +983,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
             ),
           ),
         ),
-        
+
         // Détails du panier (produits) - visible uniquement si le panier est développé
         if (isExpanded)
           Container(
@@ -994,21 +1016,24 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                   )
                 : Column(
                     children: cartItems.map((product) {
-                      return _buildProductItem(product, cartId, cartType, isDark);
+                      return _buildProductItem(
+                          product, cartId, cartType, isDark);
                     }).toList(),
                   ),
           ),
       ],
     );
   }
-  
-  Widget _buildProductItem(Map<String, dynamic> product, String cartId, String cartType, bool isDark) {
+
+  Widget _buildProductItem(Map<String, dynamic> product, String cartId,
+      String cartType, bool isDark) {
     final productId = product['product_id'] ?? product['id'];
     final quantity = product['quantity'] ?? 1;
     final productName = product['name'] ?? product['product_name'] ?? 'Produit';
     final productImage = product['image'] ?? product['product_image'];
-    final productPrice = _safeToDouble(product['price'] ?? product['product_price'] ?? 0);
-    
+    final productPrice =
+        _safeToDouble(product['price'] ?? product['product_price'] ?? 0);
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1048,9 +1073,9 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                     color: AppColors.primary,
                   ),
           ),
-          
+
           const SizedBox(width: 12),
-          
+
           // Nom et prix du produit
           Expanded(
             child: Column(
@@ -1078,13 +1103,14 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
               ],
             ),
           ),
-          
+
           // Contrôles de quantité
           Row(
             children: [
               // Bouton moins
               GestureDetector(
-                onTap: () => _updateProductQuantity(cartId, productId, quantity - 1),
+                onTap: () =>
+                    _updateProductQuantity(cartId, productId, quantity - 1),
                 child: Container(
                   width: 28,
                   height: 28,
@@ -1102,7 +1128,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              
+
               // Quantité
               Container(
                 width: 36,
@@ -1118,10 +1144,11 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              
+
               // Bouton plus
               GestureDetector(
-                onTap: () => _updateProductQuantity(cartId, productId, quantity + 1),
+                onTap: () =>
+                    _updateProductQuantity(cartId, productId, quantity + 1),
                 child: Container(
                   width: 28,
                   height: 28,
@@ -1142,7 +1169,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
       ),
     );
   }
-  
+
   String _getCartTypeLabel(String cartType) {
     switch (cartType) {
       case 'personal':
@@ -1206,7 +1233,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                   ),
                 ),
                 Text(
-                  CurrencyUtils.formatPrice(_selectedDeliveryFee), // Use dynamic fee
+                  CurrencyUtils.formatPrice(
+                      _selectedDeliveryFee), // Use dynamic fee
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -1228,7 +1256,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                   ),
                 ),
                 Text(
-                  CurrencyUtils.formatPrice(_total + _selectedDeliveryFee), // Use dynamic fee
+                  CurrencyUtils.formatPrice(
+                      _total + _selectedDeliveryFee), // Use dynamic fee
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -1238,7 +1267,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Bouton commander
             SizedBox(
               width: double.infinity,
@@ -1270,7 +1299,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
 
   Widget _buildCheckoutBottomSheet() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.getCardBackground(isDark),
@@ -1296,7 +1325,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(height: 20),
-            
+
             // Titre
             Text(
               'Finaliser la commande',
@@ -1307,7 +1336,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(height: 20),
-            
+
             // Adresse de livraison
             Row(
               children: [
@@ -1328,7 +1357,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                 const SizedBox(width: 8),
                 IconButton(
                   onPressed: _isGettingLocation ? null : _getCurrentLocation,
-                  icon: _isGettingLocation 
+                  icon: _isGettingLocation
                       ? const SizedBox(
                           width: 24,
                           height: 24,
@@ -1340,7 +1369,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Zone de livraison
             DropdownButtonFormField<String>(
               value: _selectedZoneId,
@@ -1355,7 +1384,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                 final fee = _safeToDouble(zone['delivery_fee']);
                 return DropdownMenuItem<String>(
                   value: zone['id'],
-                  child: Text('${zone['name']} (${CurrencyUtils.formatPrice(fee)})'),
+                  child: Text(
+                      '${zone['name']} (${CurrencyUtils.formatPrice(fee)})'),
                 );
               }).toList(),
               onChanged: (value) {
@@ -1363,18 +1393,22 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                   _selectedZoneId = value;
                   if (value != null) {
                     final selectedZoneData = _deliveryZones.firstWhere(
-                      (zone) => zone['id'] == value,
-                      orElse: () => {'delivery_fee': CurrencyUtils.deliveryFee} // Fallback
-                    );
-                    _selectedDeliveryFee = _safeToDouble(selectedZoneData['delivery_fee']);
+                        (zone) => zone['id'] == value,
+                        orElse: () => {
+                              'delivery_fee': CurrencyUtils.deliveryFee
+                            } // Fallback
+                        );
+                    _selectedDeliveryFee =
+                        _safeToDouble(selectedZoneData['delivery_fee']);
                   } else {
-                    _selectedDeliveryFee = CurrencyUtils.deliveryFee; // Fallback if no zone selected
+                    _selectedDeliveryFee = CurrencyUtils
+                        .deliveryFee; // Fallback if no zone selected
                   }
                 });
               },
             ),
             const SizedBox(height: 20),
-            
+
             // Résumé de la commande
             Container(
               padding: const EdgeInsets.all(16),
@@ -1416,7 +1450,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                         ),
                       ),
                       Text(
-                        CurrencyUtils.formatPrice(_selectedDeliveryFee), // Use dynamic fee
+                        CurrencyUtils.formatPrice(
+                            _selectedDeliveryFee), // Use dynamic fee
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -1438,7 +1473,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                         ),
                       ),
                       Text(
-                        CurrencyUtils.formatPrice(_total + _selectedDeliveryFee), // Use dynamic fee
+                        CurrencyUtils.formatPrice(
+                            _total + _selectedDeliveryFee), // Use dynamic fee
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -1450,7 +1486,7 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                 ],
               ),
             ),
-            
+
             // Méthode de paiement
             const SizedBox(height: 16),
             Container(
@@ -1502,14 +1538,15 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                 ],
               ),
             ),
-            
+
             // Boutons
             const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: _isPlacingOrder ? null : () => Navigator.pop(context),
+                    onPressed:
+                        _isPlacingOrder ? null : () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -1541,7 +1578,8 @@ class _CartPageState extends State<CartPage> with TickerProviderStateMixin {
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                               strokeWidth: 2,
                             ),
                           )

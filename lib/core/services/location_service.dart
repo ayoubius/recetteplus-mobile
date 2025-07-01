@@ -73,7 +73,8 @@ class LocationService {
   }
 
   /// Obtenir l'adresse à partir des coordonnées (geocoding inverse)
-  static Future<String?> getAddressFromCoordinates(double latitude, double longitude) async {
+  static Future<String?> getAddressFromCoordinates(
+      double latitude, double longitude) async {
     try {
       // Note: Dans une vraie application, vous utiliseriez un service de geocoding
       // comme Google Maps Geocoding API ou OpenStreetMap Nominatim
@@ -161,39 +162,52 @@ class LocationService {
   ///
   /// @param orderId L'ID de la commande pour laquelle s'abonner aux mises à jour.
   /// @return Un Stream qui émet les données de payload des messages de localisation reçus.
-  static Stream<Map<String, dynamic>> subscribeToDeliveryUpdates(String orderId) {
-    _locationChannel?.unsubscribe(); // Ensure previous channel for this service is closed.
-                                  // Consider more granular channel management if service handles multiple subscriptions.
+  static Stream<Map<String, dynamic>> subscribeToDeliveryUpdates(
+      String orderId) {
+    _locationChannel
+        ?.unsubscribe(); // Ensure previous channel for this service is closed.
+    // Consider more granular channel management if service handles multiple subscriptions.
 
     _locationChannel = _client.channel('delivery_tracking_$orderId');
-    final StreamController<Map<String, dynamic>> streamController = StreamController.broadcast();
+    final StreamController<Map<String, dynamic>> streamController =
+        StreamController.broadcast();
 
-    _locationChannel!.onBroadcast(
+    _locationChannel!
+        .onBroadcast(
       event: 'location_update',
       callback: (payload, [_]) {
         if (kDebugMode) {
           print('📍 Mise à jour de position reçue (broadcast): $payload');
         }
         // payload can be null, ensure to handle it or ensure it's Map<String, dynamic>
-        if (payload is Map<String, dynamic>) {
-          streamController.add(payload);
-        } else if (payload != null) {
-          // If payload is not null but not a map, it's unexpected. Log or handle.
-           if (kDebugMode) print('⚠️ Unexpected payload type: ${payload.runtimeType}');
-        }
+        streamController.add(payload);
       },
-    ).subscribe((status, [dynamic error]) { // Make error parameter optional and typed
+    )
+        .subscribe((status, [dynamic error]) {
       if (status == RealtimeSubscribeStatus.subscribed) {
-        if (kDebugMode) print('✅ Subscribed to location broadcast for order $orderId');
+        if (kDebugMode) {
+          print('✅ Subscribed to location broadcast for order $orderId');
+        }
       } else if (status == RealtimeSubscribeStatus.closed) {
-        if (kDebugMode) print('ℹ️ Location broadcast channel closed for order $orderId');
+        if (kDebugMode) {
+          print('ℹ️ Location broadcast channel closed for order $orderId');
+        }
         // streamController.close(); // Consider if stream should close when channel closes.
-      } else if (status == RealtimeSubscribeStatus.channelError || status == RealtimeSubscribeStatus.postgresChangesError) {
-        if (kDebugMode) print('❌ Error on location broadcast subscription for $orderId: $status, Error: $error');
-        if (error != null) streamController.addError(error); else streamController.addError(Exception('Channel error: $status'));
-      }
-       else {
-        if (kDebugMode) print('ℹ️ Location broadcast subscription status for $orderId: $status');
+      } else if (status == RealtimeSubscribeStatus.channelError) {
+        if (kDebugMode) {
+          print(
+              '❌ Error on location broadcast subscription for $orderId: $status, Error: $error');
+        }
+        if (error != null) {
+          streamController.addError(error);
+        } else {
+          streamController.addError(Exception('Channel error: $status'));
+        }
+      } else {
+        if (kDebugMode) {
+          print(
+              'ℹ️ Location broadcast subscription status for $orderId: $status');
+        }
       }
     });
 
