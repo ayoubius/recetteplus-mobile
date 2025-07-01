@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/video_service.dart';
 import '../widgets/video_player_widget.dart';
@@ -13,7 +14,7 @@ class VideosPage extends StatefulWidget {
   State<VideosPage> createState() => _VideosPageState();
 }
 
-class _VideosPageState extends State<VideosPage> {
+class _VideosPageState extends State<VideosPage> with WidgetsBindingObserver {
   final PageController _pageController = PageController();
   List<Map<String, dynamic>> _videos = [];
   bool _isLoading = true;
@@ -25,6 +26,7 @@ class _VideosPageState extends State<VideosPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadVideos();
     // Configuration de la barre de statut pour les vidéos - icônes CLAIRES sur fond SOMBRE
     _updateStatusBarForVideos();
@@ -32,10 +34,25 @@ class _VideosPageState extends State<VideosPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     // Restaurer la barre de statut normale selon le thème système
     _restoreStatusBar();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      // Pause la vidéo active
+      VideoPlayerWidget.pauseActive();
+    } else if (state == AppLifecycleState.resumed) {
+      // Reprend la vidéo active si la page est visible
+      if (ModalRoute.of(context)?.isCurrent ?? false) {
+        VideoPlayerWidget.playActive();
+      }
+    }
   }
 
   void _updateStatusBarForVideos() {
@@ -53,16 +70,18 @@ class _VideosPageState extends State<VideosPage> {
 
   void _restoreStatusBar() {
     // Restaurer selon le thème de l'application
-    final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final brightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
     final isDark = brightness == Brightness.dark;
-    
+
     SystemChrome.setSystemUIOverlayStyle(
       SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
         systemNavigationBarColor: isDark ? Colors.black : Colors.white,
-        systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness:
+            isDark ? Brightness.light : Brightness.dark,
       ),
     );
   }
@@ -77,12 +96,12 @@ class _VideosPageState extends State<VideosPage> {
     try {
       // Charger des vidéos avec mélange aléatoire
       final videos = await VideoService.getVideos(limit: 50, shuffle: true);
-      
+
       // Mélanger encore une fois pour plus d'aléatoire
       if (videos.isNotEmpty) {
         videos.shuffle(Random());
       }
-      
+
       if (mounted) {
         setState(() {
           _videos = videos;
@@ -104,7 +123,8 @@ class _VideosPageState extends State<VideosPage> {
     setState(() {
       _currentIndex = index;
     });
-    
+    // Remet la vidéo précédente à zéro
+    VideoPlayerWidget.resetAllExcept(index);
     // Incrémenter les vues de la vidéo
     if (_videos.isNotEmpty && index < _videos.length) {
       final videoId = _videos[index]['id'];
@@ -113,7 +133,6 @@ class _VideosPageState extends State<VideosPage> {
         VideoService.incrementViews(videoId);
       }
     }
-    
     // Charger plus de vidéos quand on approche de la fin (scroll infini)
     if (index >= _videos.length - 3) {
       _loadMoreVideos();
@@ -127,7 +146,7 @@ class _VideosPageState extends State<VideosPage> {
         batchSize: 10,
         excludeIds: _videos.map((v) => v['id'].toString()).toList(),
       );
-      
+
       if (moreVideos.isNotEmpty && mounted) {
         setState(() {
           _videos.addAll(moreVideos);
@@ -144,7 +163,7 @@ class _VideosPageState extends State<VideosPage> {
   Future<void> _likeVideo(String videoId, int currentLikes) async {
     try {
       await VideoService.likeVideo(videoId);
-      
+
       // Mettre à jour localement
       setState(() {
         final videoIndex = _videos.indexWhere((v) => v['id'] == videoId);
@@ -152,7 +171,7 @@ class _VideosPageState extends State<VideosPage> {
           _videos[videoIndex]['likes'] = currentLikes + 1;
         }
       });
-      
+
       // Feedback haptique
       HapticFeedback.lightImpact();
     } catch (e) {
@@ -189,7 +208,7 @@ class _VideosPageState extends State<VideosPage> {
       );
       return;
     }
-    
+
     HapticFeedback.mediumImpact();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -246,8 +265,8 @@ class _VideosPageState extends State<VideosPage> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: Text(
-                    _errorMessage.isNotEmpty 
-                        ? _errorMessage 
+                    _errorMessage.isNotEmpty
+                        ? _errorMessage
                         : 'Impossible de charger les vidéos',
                     style: const TextStyle(
                       color: Colors.white70,
@@ -325,18 +344,22 @@ class _VideosPageState extends State<VideosPage> {
             itemBuilder: (context, index) {
               final video = _videos[index];
               return VideoPlayerWidget(
+                key: ValueKey(video['id']),
                 video: video,
                 isActive: index == _currentIndex,
+                videoIndex: index,
                 onLike: () => _likeVideo(
-                  video['id'], 
-                  (video['likes'] is int) ? video['likes'] : int.tryParse(video['likes'].toString()) ?? 0,
+                  video['id'],
+                  (video['likes'] is int)
+                      ? video['likes']
+                      : int.tryParse(video['likes'].toString()) ?? 0,
                 ),
                 onShare: () => _shareVideo(video),
                 onShowRecipe: () => _showRecipe(video['recipe_id']),
               );
             },
           ),
-          
+
           // Zone de la barre de statut avec fond semi-transparent pour améliorer la visibilité
           Positioned(
             top: 0,
@@ -349,7 +372,8 @@ class _VideosPageState extends State<VideosPage> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.3), // Fond semi-transparent en haut
+                    Colors.black
+                        .withOpacity(0.3), // Fond semi-transparent en haut
                     Colors.transparent, // Transparent en bas
                   ],
                 ),

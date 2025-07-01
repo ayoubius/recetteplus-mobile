@@ -19,12 +19,12 @@ class VideoService {
         query = query.eq('category', category);
       }
 
-      final response = await query
-          .order('created_at', ascending: false)
-          .limit(limit);
+      final response =
+          await query.order('created_at', ascending: false).limit(limit);
 
-      List<Map<String, dynamic>> videos = List<Map<String, dynamic>>.from(response);
-      
+      List<Map<String, dynamic>> videos =
+          List<Map<String, dynamic>>.from(response);
+
       // Mélanger les vidéos pour un ordre aléatoire
       if (shuffle && videos.isNotEmpty) {
         videos.shuffle(Random());
@@ -42,11 +42,8 @@ class VideoService {
   // Obtenir une vidéo par ID
   static Future<Map<String, dynamic>?> getVideoById(String videoId) async {
     try {
-      final response = await _client
-          .from('videos')
-          .select()
-          .eq('id', videoId)
-          .single();
+      final response =
+          await _client.from('videos').select().eq('id', videoId).single();
 
       return response;
     } catch (e) {
@@ -66,7 +63,7 @@ class VideoService {
       if (kDebugMode) {
         print('⚠️  Erreur fonction SQL, utilisation du fallback: $e');
       }
-      
+
       // Fallback: mise à jour manuelle sans updated_at
       try {
         final video = await getVideoById(videoId);
@@ -74,9 +71,8 @@ class VideoService {
           final currentViews = video['views'] ?? 0;
           await _client
               .from('videos')
-              .update({'views': currentViews + 1})
-              .eq('id', videoId);
-          
+              .update({'views': currentViews + 1}).eq('id', videoId);
+
           if (kDebugMode) {
             print('✅ Vues incrémentées avec fallback');
           }
@@ -98,7 +94,7 @@ class VideoService {
       if (kDebugMode) {
         print('⚠️  Erreur fonction SQL, utilisation du fallback: $e');
       }
-      
+
       // Fallback: mise à jour manuelle sans updated_at
       try {
         final video = await getVideoById(videoId);
@@ -106,9 +102,8 @@ class VideoService {
           final currentLikes = video['likes'] ?? 0;
           await _client
               .from('videos')
-              .update({'likes': currentLikes + 1})
-              .eq('id', videoId);
-          
+              .update({'likes': currentLikes + 1}).eq('id', videoId);
+
           if (kDebugMode) {
             print('✅ Like ajouté avec fallback');
           }
@@ -121,6 +116,39 @@ class VideoService {
     }
   }
 
+  // Vérifie si l'utilisateur a déjà liké la vidéo
+  static Future<bool> hasUserLikedVideo(String userId, String videoId) async {
+    final res = await _client
+        .from('video_likes')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('video_id', videoId)
+        .maybeSingle();
+    return res != null;
+  }
+
+  // Like une vidéo pour un utilisateur (ajoute dans video_likes et incrémente le compteur)
+  static Future<bool> likeVideoUser(String userId, String videoId) async {
+    try {
+      // Vérifier si déjà liké
+      final alreadyLiked = await hasUserLikedVideo(userId, videoId);
+      if (alreadyLiked) return false;
+      // Ajout dans video_likes
+      await _client.from('video_likes').insert({
+        'user_id': userId,
+        'video_id': videoId,
+      });
+      // Incrémenter le compteur global
+      await likeVideo(videoId);
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Erreur likeVideoUser: $e');
+      }
+      return false;
+    }
+  }
+
   // Obtenir des vidéos infinies (pour le scroll infini)
   static Future<List<Map<String, dynamic>>> getInfiniteVideos({
     int batchSize = 10,
@@ -128,18 +156,18 @@ class VideoService {
   }) async {
     try {
       var query = _client.from('videos').select();
-      
+
       // Exclure les vidéos déjà vues
       if (excludeIds.isNotEmpty) {
         query = query.not('id', 'in', '(${excludeIds.join(',')})');
       }
 
-      final response = await query
-          .order('created_at', ascending: false)
-          .limit(batchSize);
+      final response =
+          await query.order('created_at', ascending: false).limit(batchSize);
 
-      List<Map<String, dynamic>> videos = List<Map<String, dynamic>>.from(response);
-      
+      List<Map<String, dynamic>> videos =
+          List<Map<String, dynamic>>.from(response);
+
       // Mélanger pour un ordre aléatoire
       videos.shuffle(Random());
 
@@ -153,7 +181,8 @@ class VideoService {
   }
 
   // Obtenir les vidéos par catégorie
-  static Future<List<Map<String, dynamic>>> getVideosByCategory(String category) async {
+  static Future<List<Map<String, dynamic>>> getVideosByCategory(
+      String category) async {
     try {
       final response = await _client
           .from('videos')
@@ -189,7 +218,8 @@ class VideoService {
   }
 
   // Obtenir les vidéos populaires
-  static Future<List<Map<String, dynamic>>> getPopularVideos({int limit = 10}) async {
+  static Future<List<Map<String, dynamic>>> getPopularVideos(
+      {int limit = 10}) async {
     try {
       final response = await _client
           .from('videos')
@@ -207,7 +237,8 @@ class VideoService {
   }
 
   // Obtenir les vidéos récentes
-  static Future<List<Map<String, dynamic>>> getRecentVideos({int limit = 10}) async {
+  static Future<List<Map<String, dynamic>>> getRecentVideos(
+      {int limit = 10}) async {
     try {
       final response = await _client
           .from('videos')

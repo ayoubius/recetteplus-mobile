@@ -41,11 +41,8 @@ class SupabaseService {
       final userId = uid ?? _client.auth.currentUser?.id;
       if (userId == null) return null;
 
-      final response = await _client
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .single();
+      final response =
+          await _client.from('profiles').select().eq('id', userId).single();
 
       return response;
     } catch (e) {
@@ -71,10 +68,7 @@ class SupabaseService {
       if (phoneNumber != null) updateData['phone_number'] = phoneNumber;
       if (additionalData != null) updateData.addAll(additionalData);
 
-      await _client
-          .from('profiles')
-          .update(updateData)
-          .eq('id', uid);
+      await _client.from('profiles').update(updateData).eq('id', uid);
 
       if (kDebugMode) {
         print('✅ Profil utilisateur mis à jour avec succès');
@@ -132,15 +126,13 @@ class SupabaseService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getUserFavorites({String? type}) async {
+  static Future<List<Map<String, dynamic>>> getUserFavorites(
+      {String? type}) async {
     try {
       final userId = _client.auth.currentUser?.id;
       if (userId == null) return [];
 
-      var query = _client
-          .from('favorites')
-          .select()
-          .eq('user_id', userId);
+      var query = _client.from('favorites').select().eq('user_id', userId);
 
       if (type != null) {
         query = query.eq('type', type);
@@ -262,10 +254,9 @@ class SupabaseService {
         query = query.eq('category', category);
       }
 
-      final response = await query
-          .order('created_at', ascending: false)
-          .limit(limit);
-      
+      final response =
+          await query.order('created_at', ascending: false).limit(limit);
+
       List<Map<String, dynamic>> recipes =
           List<Map<String, dynamic>>.from(response);
 
@@ -288,6 +279,19 @@ class SupabaseService {
     }
   }
 
+  static Future<Map<String, dynamic>?> getRecipeById(String recipeId) async {
+    try {
+      final response =
+          await _client.from('recipes').select().eq('id', recipeId).single();
+      return response;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Erreur récupération recette: $e');
+      }
+      return null;
+    }
+  }
+
   // Products Methods
   static Future<List<Map<String, dynamic>>> getProducts({
     String? category,
@@ -301,10 +305,8 @@ class SupabaseService {
         query = query.eq('category', category);
       }
 
-      final response = await query
-          .order('name', ascending: true)
-          .limit(limit);
-      
+      final response = await query.order('name', ascending: true).limit(limit);
+
       List<Map<String, dynamic>> products =
           List<Map<String, dynamic>>.from(response);
 

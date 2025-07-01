@@ -13,10 +13,10 @@ import 'core/services/theme_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
     print('🚀 Démarrage de l\'application...');
-    
+
     // Charger les variables d'environnement depuis le fichier .env
     String? envContent;
     try {
@@ -25,21 +25,21 @@ void main() async {
     } catch (e) {
       print('⚠️  Impossible de charger le fichier .env: $e');
     }
-    
+
     // Parser les variables d'environnement
     String supabaseUrl = 'https://your-project.supabase.co';
     String supabaseAnonKey = 'your-anon-key';
-    
+
     if (envContent != null) {
       final lines = envContent.split('\n');
       for (final line in lines) {
         if (line.trim().isEmpty || line.startsWith('#')) continue;
-        
+
         final parts = line.split('=');
         if (parts.length >= 2) {
           final key = parts[0].trim();
           final value = parts.sublist(1).join('=').trim();
-          
+
           if (key == 'SUPABASE_URL') {
             supabaseUrl = value;
           } else if (key == 'SUPABASE_ANON_KEY') {
@@ -48,32 +48,32 @@ void main() async {
         }
       }
     }
-    
+
     print('🔧 Configuration Supabase...');
     print('📍 URL: $supabaseUrl');
-    print('🔑 Anon Key: ${supabaseAnonKey.length > 20 ? '${supabaseAnonKey.substring(0, 20)}...' : 'Non définie'}');
-    
+    print(
+        '🔑 Anon Key: ${supabaseAnonKey.length > 20 ? '${supabaseAnonKey.substring(0, 20)}...' : 'Non définie'}');
+
     // Vérifier si les variables sont correctement définies
-    if (supabaseUrl == 'https://your-project.supabase.co' || 
+    if (supabaseUrl == 'https://your-project.supabase.co' ||
         supabaseAnonKey == 'your-anon-key') {
       print('⚠️  Variables d\'environnement par défaut détectées');
       print('💡 Vérifiez votre fichier .env');
     }
-    
+
     // Initialiser Supabase avec gestion d'erreur
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
       debug: true,
     );
-    
+
     print('✅ Supabase initialisé avec succès');
-    
   } catch (e) {
     print('❌ Erreur d\'initialisation Supabase: $e');
     // Continuer même en cas d'erreur pour permettre le debug
   }
-  
+
   runApp(const RecettePlusApp());
 }
 
@@ -87,13 +87,14 @@ class RecettePlusApp extends StatelessWidget {
       child: Consumer<ThemeService>(
         builder: (context, themeService, child) {
           return MaterialApp(
-            title: 'Recette Plus',
+            title: 'Recette+',
             themeMode: themeService.themeMode,
             theme: _buildLightTheme(),
             darkTheme: _buildDarkTheme(),
             home: const AuthWrapper(),
             routes: {
-              '/products': (context) => const MainNavigationPage(initialIndex: 1),
+              '/products': (context) =>
+                  const MainNavigationPage(initialIndex: 1),
             },
             debugShowCheckedModeBanner: false,
           );
@@ -166,7 +167,8 @@ class RecettePlusApp extends StatelessWidget {
         ),
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.light, // Icônes claires en mode sombre
+          statusBarIconBrightness:
+              Brightness.light, // Icônes claires en mode sombre
           statusBarBrightness: Brightness.dark,
         ),
       ),
@@ -200,7 +202,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
     try {
       // Attendre un peu pour s'assurer que Supabase est initialisé
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       setState(() {
         _isInitialized = true;
       });
@@ -216,7 +218,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     if (!_isInitialized) {
       return Scaffold(
         backgroundColor: AppColors.getBackground(isDark),
@@ -314,7 +316,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(AppColors.primary),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -333,12 +336,13 @@ class _AuthWrapperState extends State<AuthWrapper> {
         // Vérifier l'état d'authentification
         final session = snapshot.hasData ? snapshot.data!.session : null;
         final isAuthenticated = session != null;
-        
-        print('🔐 État d\'authentification: ${isAuthenticated ? 'Connecté' : 'Déconnecté'}');
+
+        print(
+            '🔐 État d\'authentification: ${isAuthenticated ? 'Connecté' : 'Déconnecté'}');
         if (isAuthenticated) {
           print('👤 Utilisateur: ${session.user.email}');
         }
-        
+
         // Navigation basée sur l'état d'authentification
         if (isAuthenticated) {
           // Utilisateur connecté -> Aller à l'application principale
@@ -354,9 +358,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
 class MainNavigationPage extends StatefulWidget {
   final int initialIndex;
-  
+
   const MainNavigationPage({
-    super.key, 
+    super.key,
     this.initialIndex = 2, // Commencer par la page vidéos (index 2) par défaut
   });
 
@@ -390,7 +394,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     // Mettre à jour la barre de statut selon le thème
     SystemChrome.setSystemUIOverlayStyle(
       SystemUiOverlayStyle(
@@ -398,10 +402,11 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
         systemNavigationBarColor: AppColors.getSurface(isDark),
-        systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness:
+            isDark ? Brightness.light : Brightness.dark,
       ),
     );
-    
+
     return Scaffold(
       body: IndexedStack(
         index: _selectedIndex,

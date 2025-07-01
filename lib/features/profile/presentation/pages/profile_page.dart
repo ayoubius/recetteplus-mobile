@@ -10,6 +10,7 @@ import 'history_page.dart';
 import 'settings_page.dart';
 import 'privacy_page.dart';
 import 'help_support_page.dart';
+import '../../../delivery/presentation/pages/order_tracking_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -18,7 +19,8 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin {
+class _ProfilePageState extends State<ProfilePage>
+    with TickerProviderStateMixin {
   Map<String, dynamic>? _userProfile;
   bool _isLoading = true;
   int _favoritesCount = 0;
@@ -27,6 +29,10 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+
+  List<Map<String, dynamic>> _orders = [];
+  bool _ordersLoading = false;
+  String? _ordersError;
 
   @override
   void initState() {
@@ -41,8 +47,9 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.3),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic));
-    
+    ).animate(CurvedAnimation(
+        parent: _animationController, curve: Curves.easeOutCubic));
+
     _loadUserData();
   }
 
@@ -60,7 +67,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
 
   void _updateStatusBarForTheme() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     // Configuration de la barre de statut selon le thème
     SystemChrome.setSystemUIOverlayStyle(
       SystemUiOverlayStyle(
@@ -68,7 +75,8 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
         systemNavigationBarColor: AppColors.getBackground(isDark),
-        systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness:
+            isDark ? Brightness.light : Brightness.dark,
       ),
     );
   }
@@ -76,28 +84,29 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   Future<void> _loadUserData() async {
     setState(() {
       _isLoading = true;
+      _ordersLoading = true;
+      _ordersError = null;
     });
-
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
         // Charger le profil utilisateur
         final profile = await SupabaseService.getUserProfile(user.id);
-        
         // Charger les statistiques
         final favorites = await SupabaseService.getUserFavorites();
         final history = await SupabaseService.getUserHistory();
-        
-        // TODO: Compter les recettes créées par l'utilisateur
-        // final recipes = await SupabaseService.getUserRecipes(user.id);
-        
+        // Charger les commandes de l'utilisateur
+        final orders = await SupabaseService.getUserOrders();
         if (mounted) {
           setState(() {
             _userProfile = profile;
             _favoritesCount = favorites.length;
             _historyCount = history.length;
             _recipesCount = 0; // TODO: recipes.length
+            _orders = List<Map<String, dynamic>>.from(orders);
             _isLoading = false;
+            _ordersLoading = false;
+            _ordersError = null;
           });
           _animationController.forward();
         }
@@ -106,6 +115,8 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _ordersLoading = false;
+          _ordersError = e.toString();
         });
         _animationController.forward();
       }
@@ -126,9 +137,9 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   String _getDisplayName() {
     final user = Supabase.instance.client.auth.currentUser;
     return _userProfile?['display_name'] ??
-        user?.userMetadata?['display_name'] ?? 
-        user?.userMetadata?['full_name'] ?? 
-        user?.email?.split('@')[0] ?? 
+        user?.userMetadata?['display_name'] ??
+        user?.userMetadata?['full_name'] ??
+        user?.email?.split('@')[0] ??
         'Utilisateur';
   }
 
@@ -136,7 +147,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     return Scaffold(
       backgroundColor: AppColors.getBackground(isDark),
       body: SafeArea(
@@ -155,22 +165,27 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                         children: [
                           // Header avec photo de profil
                           _buildProfileHeader(user, isDark),
-                          
+
                           const SizedBox(height: 32),
-                          
+
                           // Statistiques
                           _buildStatsSection(isDark),
-                          
+
                           const SizedBox(height: 32),
-                          
+
+                          // Section commandes
+                          _buildOrdersSection(isDark),
+
+                          const SizedBox(height: 32),
+
                           // Options du profil
                           _buildProfileOptions(isDark),
-                          
+
                           const SizedBox(height: 32),
-                          
+
                           // Bouton de déconnexion
                           _buildSignOutButton(isDark),
-                          
+
                           const SizedBox(height: 20),
                         ],
                       ),
@@ -262,7 +277,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             ),
           ),
           const SizedBox(height: 8),
-          
+
           // Photo de profil avec animation
           Stack(
             children: [
@@ -344,7 +359,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             ],
           ),
           const SizedBox(height: 20),
-          
+
           // Nom de l'utilisateur
           Text(
             _getDisplayName(),
@@ -356,7 +371,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          
+
           // Email
           Text(
             user?.email ?? 'email@example.com',
@@ -366,7 +381,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             ),
             textAlign: TextAlign.center,
           ),
-          
+
           // Bio si disponible
           if (_userProfile?['bio'] != null) ...[
             const SizedBox(height: 12),
@@ -382,7 +397,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
               overflow: TextOverflow.ellipsis,
             ),
           ],
-          
+
           // Localisation si disponible
           if (_userProfile?['location'] != null) ...[
             const SizedBox(height: 8),
@@ -405,9 +420,9 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
               ],
             ),
           ],
-          
+
           // Badge du provider
-          if (user?.appMetadata?['provider'] == 'google') ...[
+          if (user != null && user.appMetadata['provider'] == 'google') ...[
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -477,8 +492,9 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
       ],
     );
   }
-  
-  Widget _buildStatCard(String title, String value, IconData icon, Color color, bool isDark) {
+
+  Widget _buildStatCard(
+      String title, String value, IconData icon, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -534,6 +550,181 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     );
   }
 
+  Widget _buildOrdersSection(bool isDark) {
+    if (_ordersLoading) {
+      return Center(
+          child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(AppColors.primary)));
+    }
+    if (_ordersError != null) {
+      return Center(
+          child: Text(
+              'Erreur lors du chargement des commandes :\n$_ordersError',
+              style: TextStyle(color: AppColors.error)));
+    }
+    if (_orders.isEmpty) {
+      return Center(
+          child: Text('Aucune commande trouvée.',
+              style: TextStyle(color: AppColors.getTextSecondary(isDark))));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Mes commandes',
+            style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.getTextPrimary(isDark))),
+        const SizedBox(height: 16),
+        ..._orders.map((order) => _buildOrderCard(order, isDark)).toList(),
+      ],
+    );
+  }
+
+  Widget _buildOrderCard(Map<String, dynamic> order, bool isDark) {
+    final status = order['status'] ?? 'inconnu';
+    final createdAt = order['created_at'] != null
+        ? DateTime.tryParse(order['created_at'].toString())
+        : null;
+    final total = order['total_amount'] ?? 0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.getCardBackground(isDark),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.getShadow(isDark),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.receipt_long, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                    'Commande #${order['id']?.toString().substring(0, 8) ?? ''}',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.getTextPrimary(isDark))),
+              ),
+              _buildOrderStatusBadge(status),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (createdAt != null)
+            Text(
+                'Passée le ${createdAt.day}/${createdAt.month}/${createdAt.year} à ${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}',
+                style: TextStyle(
+                    fontSize: 13, color: AppColors.getTextSecondary(isDark))),
+          const SizedBox(height: 8),
+          Text('Total : ${total.toStringAsFixed(0)} FCFA',
+              style: TextStyle(
+                  fontSize: 14, color: AppColors.getTextPrimary(isDark))),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if ([
+                'confirmed',
+                'preparing',
+                'ready_for_pickup',
+                'out_for_delivery',
+                'delivered'
+              ].contains(order['status']))
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            OrderTrackingPage(orderId: order['id'].toString()),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.timeline),
+                  label: const Text('Suivi'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              const SizedBox(width: 12),
+              if (order['status'] == 'delivered')
+                Icon(Icons.check_circle, color: Colors.green, size: 20),
+              if (order['status'] == 'cancelled')
+                Icon(Icons.cancel, color: Colors.red, size: 20),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderStatusBadge(String status) {
+    Color color;
+    String text;
+    switch (status) {
+      case 'pending':
+        color = Colors.grey;
+        text = 'En attente';
+        break;
+      case 'confirmed':
+        color = Colors.blue;
+        text = 'Confirmée';
+        break;
+      case 'preparing':
+        color = Colors.orange;
+        text = 'Préparation';
+        break;
+      case 'ready_for_pickup':
+        color = Colors.amber;
+        text = 'Prête';
+        break;
+      case 'out_for_delivery':
+        color = Colors.purple;
+        text = 'En livraison';
+        break;
+      case 'delivered':
+        color = Colors.green;
+        text = 'Livrée';
+        break;
+      case 'cancelled':
+        color = Colors.red;
+        text = 'Annulée';
+        break;
+      default:
+        color = Colors.grey;
+        text = 'Inconnu';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.5)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   Widget _buildProfileOptions(bool isDark) {
     return Column(
       children: [
@@ -552,13 +743,12 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
           },
           isDark: isDark,
         ),
-        
         _buildProfileOption(
           context,
           icon: Icons.favorite_rounded,
           title: 'Mes favoris',
           subtitle: 'Vos recettes préférées',
-          trailing: _favoritesCount > 0 
+          trailing: _favoritesCount > 0
               ? _buildBadge(_favoritesCount.toString(), AppColors.primary)
               : null,
           onTap: () {
@@ -571,13 +761,12 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
           },
           isDark: isDark,
         ),
-        
         _buildProfileOption(
           context,
           icon: Icons.history_rounded,
           title: 'Historique',
           subtitle: 'Vos recettes récemment consultées',
-          trailing: _historyCount > 0 
+          trailing: _historyCount > 0
               ? _buildBadge(_historyCount.toString(), Colors.blue)
               : null,
           onTap: () {
@@ -590,7 +779,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
           },
           isDark: isDark,
         ),
-        
         _buildProfileOption(
           context,
           icon: Icons.security_rounded,
@@ -606,7 +794,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
           },
           isDark: isDark,
         ),
-        
         _buildProfileOption(
           context,
           icon: Icons.settings_rounded,
@@ -622,7 +809,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
           },
           isDark: isDark,
         ),
-        
         _buildProfileOption(
           context,
           icon: Icons.help_outline_rounded,
@@ -638,7 +824,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
           },
           isDark: isDark,
         ),
-        
         _buildProfileOption(
           context,
           icon: Icons.info_outline_rounded,
@@ -699,7 +884,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
       ),
     );
   }
-  
+
   Widget _buildProfileOption(
     BuildContext context, {
     required IconData icon,
@@ -723,7 +908,8 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
         ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         leading: Container(
           width: 56,
           height: 56,
@@ -756,11 +942,12 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             color: AppColors.getTextSecondary(isDark),
           ),
         ),
-        trailing: trailing ?? Icon(
-          Icons.arrow_forward_ios_rounded,
-          size: 16,
-          color: AppColors.getTextSecondary(isDark),
-        ),
+        trailing: trailing ??
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 16,
+              color: AppColors.getTextSecondary(isDark),
+            ),
         onTap: () {
           HapticFeedback.lightImpact();
           onTap();
@@ -820,14 +1007,14 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
               ],
             ),
           );
-          
+
           if (shouldLogout == true) {
             try {
               HapticFeedback.mediumImpact();
-              
+
               // Utiliser le service Google pour une déconnexion complète
               await GoogleAuthService.signOut();
-              
+
               if (context.mounted) {
                 // Navigation automatique gérée par AuthWrapper
                 ScaffoldMessenger.of(context).showSnackBar(
